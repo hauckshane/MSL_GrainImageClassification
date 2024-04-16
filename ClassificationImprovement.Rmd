@@ -18,33 +18,7 @@ library(tidyverse)
 ```{r}
 train <- read_csv("train_data.csv")
 test_x <- read_csv("test_data_x.csv")
-
 ```
-
-# Data Pre-Processing
-```{r}
-# Check for missing values
-sum(is.na(train))
-sum(is.na(test_x))
-
-# Check for duplicates
-train %>% distinct() %>% nrow()
-test_x %>% distinct() %>% nrow()
-
-# Check for outliers
-train %>% summary()
-test_x %>% summary()
-
-# Check for class imbalance
-train %>% group_by(Y) %>% count()
-
-# Check for multicollinearity
-library(GGally)
-# ggpairs(train)
-
-
-```
-
 
 # Split train into train and validation
 ```{r}
@@ -93,8 +67,6 @@ coef(lasso_model, s = "lambda.min")
 
 ```
 
-
-
 # Original Support Vector Machine fit
 ```{r}
 library(e1071)
@@ -114,7 +86,6 @@ table(Y_pred_class_svm, Y_val)
 ```
 
 # Fit SVM with LASSO Selected Variables
-
 ```{r}
 # Training set with only lasso variables
 X_train <- as.matrix(train_data %>% dplyr::select(-c(Y,
@@ -153,7 +124,6 @@ table(Y_pred_class_svm, Y_val)
 ```
 
 # Experiment with different tuning parameters
-
 ```{r}
 # Training set
 X_train <- as.matrix(train_data %>% dplyr::select(-Y))
@@ -201,9 +171,8 @@ cat("Highest Accuracy: ", highest_accuracy, "\n")
 ```
 
 # Best SVM with tuning parameters
-
 ```{r}
-# Fit the model
+# Fit the ideal model
 svm_model <- svm(X_train, Y_train, kernel = "radial", cost=0.7, gamma=0.01)
 
 # Make predictions
@@ -212,4 +181,7 @@ Y_pred_class_svm <- ifelse(Y_pred_svm > 0.5, 1, 0)
 
 # Calculate the accuracy
 mean(Y_pred_class_svm == Y_val)
+
+# Confusion matrix
+table(Y_pred_class_svm, Y_val)
 ```
