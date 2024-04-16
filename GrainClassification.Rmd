@@ -1,0 +1,289 @@
+---
+title: "Data Pre-Processing and Explorations"
+author: "Shane Hauck"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Load Packages
+```{r}
+library(tidyverse)
+```
+
+# Load Data
+```{r}
+train <- read_csv("train_data.csv")
+test_x <- read_csv("test_data_x.csv")
+
+```
+
+# Data Pre-Processing
+```{r}
+# Check for missing values
+sum(is.na(train))
+sum(is.na(test_x))
+
+# Check for duplicates
+train %>% distinct() %>% nrow()
+test_x %>% distinct() %>% nrow()
+
+# Check for outliers
+train %>% summary()
+test_x %>% summary()
+
+# Check for class imbalance
+train %>% group_by(Y) %>% count()
+
+# Check for multicollinearity
+library(GGally)
+# ggpairs(train)
+
+
+```
+
+
+# Split train into train and validation
+```{r}
+set.seed(123)
+train_index <- sample(1:nrow(train), 0.8*nrow(train))
+train_data <- train[train_index,]
+validation_data <- train[-train_index,]
+
+```
+
+# Create matrix of predictors and response
+```{r}
+# Training set
+X_train <- as.matrix(train_data %>% select(-Y))
+Y_train <- as.matrix(train_data %>% select(Y))
+
+# Validation set
+X_val <- as.matrix(validation_data %>% select(-Y))
+Y_val <- as.matrix(validation_data %>% select(Y))
+
+```
+
+# Fit a LASSO model 
+```{r}
+library(glmnet)
+
+# Fit the model
+lasso_model <- cv.glmnet(X_train, Y_train, family = "binomial", alpha = 1)
+
+# Make predictions
+Y_pred_lasso <- predict(lasso_model, s = "lambda.min", newx = X_val, type = "response")
+
+# Calculate the accuracy
+Y_pred_class_lasso <- ifelse(Y_pred_lasso > 0.5, 1, 0)
+mean(Y_pred_class_lasso == Y_val)
+
+# Confusion matrix
+table(Y_pred_class_lasso, Y_val)
+
+# Log likelihood loss
+log_loss <- -mean(Y_val*log(Y_pred_lasso) + (1-Y_val)*log(1-Y_pred_lasso))
+log_loss
+
+# Show the coefficients
+coef(lasso_model, s = "lambda.min")
+
+```
+
+# Fit a Ridge model
+```{r}
+# Fit the model
+ridge_model <- cv.glmnet(X_train, Y_train, family = "binomial", alpha = 0)
+
+# Make predictions
+Y_pred_ridge <- predict(ridge_model, s = "lambda.min", newx = X_val, type = "response")
+
+# Calculate the accuracy
+Y_pred_class_ridge <- ifelse(Y_pred_ridge > 0.5, 1, 0)
+mean(Y_pred_class_ridge == Y_val)
+
+# Confusion matrix
+table(Y_pred_class_ridge, Y_val)
+
+# Log likelihood loss
+log_loss <- -mean(Y_val*log(Y_pred_ridge) + (1-Y_val)*log(1-Y_pred_ridge))
+log_loss
+
+# Show the coefficients
+coef(ridge_model, s = "lambda.min")
+
+
+```
+
+# Fit a Random Forest model
+```{r}
+library(randomForest)
+
+# Fit the model
+rf_model <- randomForest(X_train, Y_train, ntree = 50, mtry = 5)
+
+# Make predictions
+Y_pred_rf <- predict(rf_model, X_val, type = "response")
+
+# Calculate the accuracy
+Y_pred_class_rf <- ifelse(Y_pred_rf > 0.5, 1, 0)
+mean(Y_pred_class_rf == Y_val)
+
+# Confusion matrix  
+table(Y_pred_class_rf, Y_val)
+
+```
+
+# Fit a Gradient Boosting model
+```{r}
+library(xgboost)
+
+# Fit the model
+xgb_model <- xgboost(data = X_train, label = Y_train, nrounds = 50, objective = "binary:logistic")
+
+# Make predictions
+Y_pred_xgb <- predict(xgb_model, X_val)
+
+# Calculate the accuracy
+Y_pred_class_xgb <- ifelse(Y_pred_xgb > 0.5, 1, 0)
+mean(Y_pred_class_xgb == Y_val)
+
+# Confusion matrix
+table(Y_pred_class_xgb, Y_val)
+
+```
+
+# Fit a K-Nearest Neighbors model
+```{r}
+library(class)
+
+# Fit the model
+knn_model <- knn(X_train, X_val, Y_train, k = 5)
+
+# Calculate the accuracy
+mean(knn_model == Y_val)
+
+# Confusion matrix
+table(knn_model, Y_val)
+
+```
+
+# Fit a Support Vector Machine model
+```{r}
+library(e1071)
+
+# Fit the model
+svm_model <- svm(X_train, Y_train, kernel = "radial")
+
+# Make predictions
+Y_pred_svm <- predict(svm_model, X_val)
+Y_pred_class_svm <- ifelse(Y_pred_svm > 0.5, 1, 0)
+
+# Calculate the accuracy
+mean(Y_pred_class_svm == Y_val)
+
+# Confusion matrix
+table(Y_pred_class_svm, Y_val)
+
+```
+
+# Fit a Tree model
+```{r}
+library(rpart)
+# Fit the model
+tree_model <- rpart(Y ~ ., data = train_data, method = "class")
+
+# Make predictions
+Y_pred_tree <- predict(tree_model, validation_data, type = "class")
+Y_pred_class_tree <- ifelse(Y_pred_tree == "1", 1, 0)
+
+# Calculate the accuracy
+mean(Y_pred_class_tree == Y_val)
+
+# Confusion matrix
+table(Y_pred_class_tree, Y_val)
+
+```
+
+# Fit a Linear Discriminant Analysis model
+```{r}
+library(MASS)
+
+# Fit the model
+lda_model <- lda(Y ~ ., data = train_data)
+
+# Make predictions
+Y_pred_lda <- predict(lda_model, validation_data)$class
+Y_pred_class_lda <- ifelse(Y_pred_lda == "1", 1, 0)
+
+# Calculate the accuracy
+mean(Y_pred_class_lda == Y_val)
+
+# Confusion matrix
+table(Y_pred_class_lda, Y_val)
+
+```
+
+# Fit a Quadratic Discriminant Analysis model
+```{r}
+# Fit the model
+qda_model <- qda(Y ~ ., data = train_data)
+
+# Make predictions
+Y_pred_qda <- predict(qda_model, validation_data)$class
+Y_pred_class_qda <- ifelse(Y_pred_qda == "1", 1, 0)
+
+# Calculate the accuracy
+mean(Y_pred_class_qda == Y_val)
+
+# Confusion matrix
+table(Y_pred_class_qda, Y_val)
+
+```
+
+# Fit a Naive Bayes model
+```{r}
+library(e1071)
+
+# Fit the model
+nb_model <- naiveBayes(Y ~ ., data = train_data)
+
+# Make predictions
+Y_pred_nb <- predict(nb_model, validation_data)
+Y_pred_class_nb <- ifelse(Y_pred_nb == "1", 1, 0)
+
+# Calculate the accuracy
+mean(Y_pred_class_nb == Y_val)
+
+# Confusion matrix
+table(Y_pred_class_nb, Y_val)
+
+```
+
+
+# Report the results for each model
+```{r}
+# Collect accuracy scores
+accuracy_scores <- tibble(
+  Method = c("LASSO", "Ridge", "Random Forest", "Gradient Boosting", "K-Nearest Neighbors", "Support Vector Machine", "Tree", "Linear Discriminant Analysis", "Quadratic Discriminant Analysis", "Naive Bayes"),
+  Accuracy = c(
+    mean(Y_pred_class_lasso == Y_val),
+    mean(Y_pred_class_ridge == Y_val),
+    mean(Y_pred_class_rf == Y_val),
+    mean(Y_pred_class_xgb == Y_val),
+    mean(knn_model == Y_val),
+    mean(Y_pred_class_svm == Y_val),
+    mean(Y_pred_class_tree == Y_val),
+    mean(Y_pred_class_lda == Y_val),
+    mean(Y_pred_class_qda == Y_val),
+    mean(Y_pred_class_nb == Y_val)
+  )
+)
+
+# Print the accuracy scores ordered by accuracy
+accuracy_scores %>% arrange(desc(Accuracy))
+
+```
