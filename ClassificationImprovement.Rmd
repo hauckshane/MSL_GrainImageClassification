@@ -1,0 +1,215 @@
+---
+title: "Improving the SVM"
+author: "Zachary Strennen"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Load Packages
+```{r}
+library(tidyverse)
+```
+
+# Load Data
+```{r}
+train <- read_csv("train_data.csv")
+test_x <- read_csv("test_data_x.csv")
+
+```
+
+# Data Pre-Processing
+```{r}
+# Check for missing values
+sum(is.na(train))
+sum(is.na(test_x))
+
+# Check for duplicates
+train %>% distinct() %>% nrow()
+test_x %>% distinct() %>% nrow()
+
+# Check for outliers
+train %>% summary()
+test_x %>% summary()
+
+# Check for class imbalance
+train %>% group_by(Y) %>% count()
+
+# Check for multicollinearity
+library(GGally)
+# ggpairs(train)
+
+
+```
+
+
+# Split train into train and validation
+```{r}
+set.seed(123)
+train_index <- sample(1:nrow(train), 0.8*nrow(train))
+train_data <- train[train_index,]
+validation_data <- train[-train_index,]
+
+```
+
+# Create matrix of predictors and response
+```{r}
+# Training set
+X_train <- as.matrix(train_data %>% dplyr::select(-Y))
+Y_train <- as.matrix(train_data %>% dplyr::select(Y))
+
+# Validation set
+X_val <- as.matrix(validation_data %>% dplyr::select(-Y))
+Y_val <- as.matrix(validation_data %>% dplyr::select(Y))
+
+```
+
+# Fit a LASSO model 
+```{r}
+library(glmnet)
+
+# Fit the model
+lasso_model <- cv.glmnet(X_train, Y_train, family = "binomial", alpha = 1)
+
+# Make predictions
+Y_pred_lasso <- predict(lasso_model, s = "lambda.min", newx = X_val, type = "response")
+
+# Calculate the accuracy
+Y_pred_class_lasso <- ifelse(Y_pred_lasso > 0.5, 1, 0)
+mean(Y_pred_class_lasso == Y_val)
+
+# Confusion matrix
+table(Y_pred_class_lasso, Y_val)
+
+# Log likelihood loss
+log_loss <- -mean(Y_val*log(Y_pred_lasso) + (1-Y_val)*log(1-Y_pred_lasso))
+log_loss
+
+# Show the coefficients
+coef(lasso_model, s = "lambda.min")
+
+```
+
+
+
+# Original Support Vector Machine fit
+```{r}
+library(e1071)
+
+# Fit the model
+svm_model <- svm(X_train, Y_train, kernel = "radial")
+
+# Make predictions
+Y_pred_svm <- predict(svm_model, X_val)
+Y_pred_class_svm <- ifelse(Y_pred_svm > 0.5, 1, 0)
+
+# Calculate the accuracy
+mean(Y_pred_class_svm == Y_val)
+
+# Confusion matrix
+table(Y_pred_class_svm, Y_val)
+```
+
+# Fit SVM with LASSO Selected Variables
+
+```{r}
+# Training set with only lasso variables
+X_train <- as.matrix(train_data %>% dplyr::select(-c(Y,
+                                                     Area,
+                                                     MajorAxisLength,
+                                                     MinorAxisLength,
+                                                     EquivDiameter,
+                                                     Compactness,
+                                                     ShapeFactor2,
+                                                     ShapeFactor3)))
+Y_train <- as.matrix(train_data %>% dplyr::select(Y))
+
+# Validation set with only lasso variables
+X_val <- as.matrix(validation_data %>% dplyr::select(-c(Y,
+                                                     Area,
+                                                     MajorAxisLength,
+                                                     MinorAxisLength,
+                                                     EquivDiameter,
+                                                     Compactness,
+                                                     ShapeFactor2,
+                                                     ShapeFactor3)))
+Y_val <- as.matrix(validation_data %>% dplyr::select(Y))
+
+# Fit the model
+svm_model <- svm(X_train, Y_train, kernel = "radial")
+
+# Make predictions
+Y_pred_svm <- predict(svm_model, X_val)
+Y_pred_class_svm <- ifelse(Y_pred_svm > 0.5, 1, 0)
+
+# Calculate the accuracy
+mean(Y_pred_class_svm == Y_val)
+
+# Confusion matrix
+table(Y_pred_class_svm, Y_val)
+```
+
+# Experiment with different tuning parameters
+
+```{r}
+# Training set
+X_train <- as.matrix(train_data %>% dplyr::select(-Y))
+Y_train <- as.matrix(train_data %>% dplyr::select(Y))
+
+# Validation set
+X_val <- as.matrix(validation_data %>% dplyr::select(-Y))
+Y_val <- as.matrix(validation_data %>% dplyr::select(Y))
+
+# Define ranges for the tuning parameters
+costs <- c(0.6, 0.7, 0.8, 0.9, 1)
+gammas <- c(0.008, 0.009, 0.01, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045)
+
+# Initialize variables to store the best parameters and highest accuracy
+best_cost <- NULL
+best_gamma <- NULL
+highest_accuracy <- 0
+
+# Loop through all combinations of cost and gamma
+for (cost in costs) {
+  for (gamma in gammas) {
+    # Fit the model with the current combination of parameters
+    svm_model <- svm(X_train, Y_train, kernel = "radial", cost = cost, gamma = gamma)
+    
+    # Make predictions
+    Y_pred_svm <- predict(svm_model, X_val)
+    Y_pred_class_svm <- ifelse(Y_pred_svm > 0.5, 1, 0)  # Assuming your Y is a binary outcome
+
+    # Calculate the accuracy
+    current_accuracy <- mean(Y_pred_class_svm == Y_val)
+
+    # Update the best parameters if the current accuracy is higher
+    if (current_accuracy > highest_accuracy) {
+      highest_accuracy <- current_accuracy
+      best_cost <- cost
+      best_gamma <- gamma
+    }
+  }
+}
+
+# Output the best parameters and the highest accuracy
+cat("Best Cost: ", best_cost, "\n")
+cat("Best Gamma: ", best_gamma, "\n")
+cat("Highest Accuracy: ", highest_accuracy, "\n")
+```
+
+# Best SVM with tuning parameters
+
+```{r}
+# Fit the model
+svm_model <- svm(X_train, Y_train, kernel = "radial", cost=0.7, gamma=0.01)
+
+# Make predictions
+Y_pred_svm <- predict(svm_model, X_val)
+Y_pred_class_svm <- ifelse(Y_pred_svm > 0.5, 1, 0)
+
+# Calculate the accuracy
+mean(Y_pred_class_svm == Y_val)
+```
