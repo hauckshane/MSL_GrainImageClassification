@@ -118,6 +118,23 @@ coef(ridge_model, s = "lambda.min")
 
 ```
 
+# Fit a Elastic Net model
+```{r}
+# Fit the model
+enet_model <- cv.glmnet(X_train, Y_train, family = "binomial", alpha = 0.5)
+
+# Make predictions
+Y_pred_enet <- predict(enet_model, s = "lambda.min", newx = X_val, type = "response")
+Y_pred_class_enet <- ifelse(Y_pred_enet > 0.5, 1, 0)
+
+# Calculate the accuracy
+mean(Y_pred_class_enet == Y_val)
+
+# Confusion matrix
+table(Y_pred_class_enet, Y_val)
+
+```
+
 # Fit a Random Forest model
 ```{r}
 library(randomForest)
@@ -264,14 +281,18 @@ table(Y_pred_class_nb, Y_val)
 ```
 
 
+
 # Report the results for each model
 ```{r}
 # Collect accuracy scores
 accuracy_scores <- tibble(
-  Method = c("LASSO", "Ridge", "Random Forest", "Gradient Boosting", "K-Nearest Neighbors", "Support Vector Machine", "Tree", "Linear Discriminant Analysis", "Quadratic Discriminant Analysis", "Naive Bayes"),
+  Method = c("LASSO", "Ridge", "Elastic Net", "Random Forest", "Gradient Boosting", 
+             "K-Nearest Neighbors", "Support Vector Machine", "Tree", 
+             "Linear Discriminant Analysis", "Quadratic Discriminant Analysis", "Naive Bayes"),
   Accuracy = c(
     mean(Y_pred_class_lasso == Y_val),
     mean(Y_pred_class_ridge == Y_val),
+    mean(Y_pred_class_enet == Y_val),
     mean(Y_pred_class_rf == Y_val),
     mean(Y_pred_class_xgb == Y_val),
     mean(knn_model == Y_val),
