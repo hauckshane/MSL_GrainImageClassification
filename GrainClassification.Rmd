@@ -91,6 +91,28 @@ log_loss
 # Show the coefficients
 coef(lasso_model, s = "lambda.min")
 
+
+# Bootstrapping
+boot_lasso_acc <- c()
+set.seed(123)
+for (i in 1:25){
+  boot_index <- sample(1:nrow(train), nrow(train), replace = TRUE)
+  boot_data <- train[boot_index,]
+  boot_data_test <- train[-boot_index,]
+  X_boot <- as.matrix(boot_data %>% dplyr::select(-Y))
+  Y_boot <- as.matrix(boot_data %>% dplyr::select(Y))
+  X_boot_test <- as.matrix(boot_data_test %>% dplyr::select(-Y))
+  Y_boot_test <- as.matrix(boot_data_test %>% dplyr::select(Y))
+  boot_model <- cv.glmnet(X_boot, Y_boot, family = "binomial", alpha = 1)
+  boot_pred <- predict(boot_model, s = "lambda.min", newx = X_boot_test, type = "response")
+  boot_class <- ifelse(boot_pred > 0.5, 1, 0)
+  boot_acc <- mean(boot_class == Y_boot_test)
+  boot_lasso_acc <- c(boot_lasso_acc, boot_acc)
+}
+
+mean_boot_lasso <- mean(boot_lasso_acc)
+
+
 ```
 
 # Fit a Ridge model
@@ -115,6 +137,25 @@ log_loss
 # Show the coefficients
 coef(ridge_model, s = "lambda.min")
 
+# Bootstrapping
+boot_ridge_acc <- c()
+set.seed(123)
+for (i in 1:25){
+  boot_index <- sample(1:nrow(train), nrow(train), replace = TRUE)
+  boot_data <- train[boot_index,]
+  boot_data_test <- train[-boot_index,]
+  X_boot <- as.matrix(boot_data %>% dplyr::select(-Y))
+  Y_boot <- as.matrix(boot_data %>% dplyr::select(Y))
+  X_boot_test <- as.matrix(boot_data_test %>% dplyr::select(-Y))
+  Y_boot_test <- as.matrix(boot_data_test %>% dplyr::select(Y))
+  boot_model <- cv.glmnet(X_boot, Y_boot, family = "binomial", alpha = 0)
+  boot_pred <- predict(boot_model, s = "lambda.min", newx = X_boot_test, type = "response")
+  boot_class <- ifelse(boot_pred > 0.5, 1, 0)
+  boot_acc <- mean(boot_class == Y_boot_test)
+  boot_ridge_acc <- c(boot_ridge_acc, boot_acc)
+}
+
+mean_boot_ridge <- mean(boot_ridge_acc)
 
 ```
 
@@ -132,6 +173,26 @@ mean(Y_pred_class_enet == Y_val)
 
 # Confusion matrix
 table(Y_pred_class_enet, Y_val)
+
+# Bootstrapping
+boot_enet_acc <- c()
+set.seed(123)
+for (i in 1:25){
+  boot_index <- sample(1:nrow(train), nrow(train), replace = TRUE)
+  boot_data <- train[boot_index,]
+  boot_data_test <- train[-boot_index,]
+  X_boot <- as.matrix(boot_data %>% dplyr::select(-Y))
+  Y_boot <- as.matrix(boot_data %>% dplyr::select(Y))
+  X_boot_test <- as.matrix(boot_data_test %>% dplyr::select(-Y))
+  Y_boot_test <- as.matrix(boot_data_test %>% dplyr::select(Y))
+  boot_model <- cv.glmnet(X_boot, Y_boot, family = "binomial", alpha = 0.5)
+  boot_pred <- predict(boot_model, s = "lambda.min", newx = X_boot_test, type = "response")
+  boot_class <- ifelse(boot_pred > 0.5, 1, 0)
+  boot_acc <- mean(boot_class == Y_boot_test)
+  boot_enet_acc <- c(boot_enet_acc, boot_acc)
+}
+
+mean_boot_enet <- mean(boot_enet_acc)
 
 ```
 
@@ -152,6 +213,26 @@ mean(Y_pred_class_rf == Y_val)
 # Confusion matrix  
 table(Y_pred_class_rf, Y_val)
 
+# Bootstrapping
+boot_rf_acc <- c()
+set.seed(123)
+for (i in 1:25){
+  boot_index <- sample(1:nrow(train), nrow(train), replace = TRUE)
+  boot_data <- train[boot_index,]
+  boot_data_test <- train[-boot_index,]
+  X_boot <- as.matrix(boot_data %>% dplyr::select(-Y))
+  Y_boot <- as.matrix(boot_data %>% dplyr::select(Y))
+  X_boot_test <- as.matrix(boot_data_test %>% dplyr::select(-Y))
+  Y_boot_test <- as.matrix(boot_data_test %>% dplyr::select(Y))
+  boot_model <- randomForest(X_boot, Y_boot, ntree = 25, mtry = 3)
+  boot_pred <- predict(boot_model, X_boot_test, type = "response")
+  boot_class <- ifelse(boot_pred > 0.5, 1, 0)
+  boot_acc <- mean(boot_class == Y_boot_test)
+  boot_rf_acc <- c(boot_rf_acc, boot_acc)
+}
+
+mean_boot_rf <- mean(boot_rf_acc)
+
 ```
 
 # Fit a Gradient Boosting model
@@ -171,6 +252,26 @@ mean(Y_pred_class_xgb == Y_val)
 # Confusion matrix
 table(Y_pred_class_xgb, Y_val)
 
+# Bootstrapping
+boot_xgb_acc <- c()
+set.seed(123)
+for (i in 1:25){
+  boot_index <- sample(1:nrow(train), nrow(train), replace = TRUE)
+  boot_data <- train[boot_index,]
+  boot_data_test <- train[-boot_index,]
+  X_boot <- as.matrix(boot_data %>% dplyr::select(-Y))
+  Y_boot <- as.matrix(boot_data %>% dplyr::select(Y))
+  X_boot_test <- as.matrix(boot_data_test %>% dplyr::select(-Y))
+  Y_boot_test <- as.matrix(boot_data_test %>% dplyr::select(Y))
+  boot_model <- xgboost(data = X_boot, label = Y_boot, nrounds = 25, objective = "binary:logistic")
+  boot_pred <- predict(boot_model, X_boot_test)
+  boot_class <- ifelse(boot_pred > 0.5, 1, 0)
+  boot_acc <- mean(boot_class == Y_boot_test)
+  boot_xgb_acc <- c(boot_xgb_acc, boot_acc)
+}
+
+mean_boot_xgb <- mean(boot_xgb_acc)
+
 ```
 
 # Fit a K-Nearest Neighbors model
@@ -186,6 +287,24 @@ mean(knn_model == Y_val)
 # Confusion matrix
 table(knn_model, Y_val)
 
+# Bootstrapping
+boot_knn_acc <- c()
+set.seed(123)
+for (i in 1:25){
+  boot_index <- sample(1:nrow(train), nrow(train), replace = TRUE)
+  boot_data <- train[boot_index,]
+  boot_data_test <- train[-boot_index,]
+  X_boot <- as.matrix(boot_data %>% dplyr::select(-Y))
+  Y_boot <- as.matrix(boot_data %>% dplyr::select(Y))
+  X_boot_test <- as.matrix(boot_data_test %>% dplyr::select(-Y))
+  Y_boot_test <- as.matrix(boot_data_test %>% dplyr::select(Y))
+  boot_model <- knn(X_boot, X_boot_test, Y_boot, k = 5)
+  boot_acc <- mean(boot_model == Y_boot_test)
+  boot_knn_acc <- c(boot_knn_acc, boot_acc)
+}
+
+mean_boot_knn <- mean(boot_knn_acc)
+
 ```
 
 # Fit a Support Vector Machine model
@@ -193,7 +312,7 @@ table(knn_model, Y_val)
 library(e1071)
 
 # Fit the model
-svm_model <- svm(X_train, Y_train, kernel = "radial")
+svm_model <- svm(X_train, Y_train, kernel = "radial", cost=0.7, gamma=0.01)
 
 # Make predictions
 Y_pred_svm <- predict(svm_model, X_val)
@@ -204,6 +323,26 @@ mean(Y_pred_class_svm == Y_val)
 
 # Confusion matrix
 table(Y_pred_class_svm, Y_val)
+
+# Bootstrapping
+boot_svm_acc <- c()
+set.seed(123)
+for (i in 1:25){
+  boot_index <- sample(1:nrow(train), nrow(train), replace = TRUE)
+  boot_data <- train[boot_index,]
+  boot_data_test <- train[-boot_index,]
+  X_boot <- as.matrix(boot_data %>% dplyr::select(-Y))
+  Y_boot <- as.matrix(boot_data %>% dplyr::select(Y))
+  X_boot_test <- as.matrix(boot_data_test %>% dplyr::select(-Y))
+  Y_boot_test <- as.matrix(boot_data_test %>% dplyr::select(Y))
+  boot_model <- svm(X_boot, Y_boot, kernel = "radial", cost=0.7, gamma=0.01)
+  boot_pred <- predict(boot_model, X_boot_test)
+  boot_class <- ifelse(boot_pred > 0.5, 1, 0)
+  boot_acc <- mean(boot_class == Y_boot_test)
+  boot_svm_acc <- c(boot_svm_acc, boot_acc)
+}
+
+mean_boot_svm <- mean(boot_svm_acc)
 
 ```
 
@@ -222,6 +361,26 @@ mean(Y_pred_class_tree == Y_val)
 
 # Confusion matrix
 table(Y_pred_class_tree, Y_val)
+
+# Bootstrapping
+boot_tree_acc <- c()
+set.seed(123)
+for (i in 1:25){
+  boot_index <- sample(1:nrow(train), nrow(train), replace = TRUE)
+  boot_data <- train[boot_index,]
+  boot_data_test <- train[-boot_index,]
+  X_boot <- as.matrix(boot_data %>% dplyr::select(-Y))
+  Y_boot <- as.matrix(boot_data %>% dplyr::select(Y))
+  X_boot_test <- as.matrix(boot_data_test %>% dplyr::select(-Y))
+  Y_boot_test <- as.matrix(boot_data_test %>% dplyr::select(Y))
+  boot_model <- rpart(Y ~ ., data = boot_data, method = "class")
+  boot_pred <- predict(boot_model, boot_data_test, type = "class")
+  boot_class <- ifelse(boot_pred == "1", 1, 0)
+  boot_acc <- mean(boot_class == Y_boot_test)
+  boot_tree_acc <- c(boot_tree_acc, boot_acc)
+}
+
+mean_boot_tree <- mean(boot_tree_acc)
 
 ```
 
@@ -242,6 +401,26 @@ mean(Y_pred_class_lda == Y_val)
 # Confusion matrix
 table(Y_pred_class_lda, Y_val)
 
+# Bootstrapping
+boot_lda_acc <- c()
+set.seed(123)
+for (i in 1:25){
+  boot_index <- sample(1:nrow(train), nrow(train), replace = TRUE)
+  boot_data <- train[boot_index,]
+  boot_data_test <- train[-boot_index,]
+  X_boot <- as.matrix(boot_data %>% dplyr::select(-Y))
+  Y_boot <- as.matrix(boot_data %>% dplyr::select(Y))
+  X_boot_test <- as.matrix(boot_data_test %>% dplyr::select(-Y))
+  Y_boot_test <- as.matrix(boot_data_test %>% dplyr::select(Y))
+  boot_model <- lda(Y ~ ., data = boot_data)
+  boot_pred <- predict(boot_model, boot_data_test)$class
+  boot_class <- ifelse(boot_pred == "1", 1, 0)
+  boot_acc <- mean(boot_class == Y_boot_test)
+  boot_lda_acc <- c(boot_lda_acc, boot_acc)
+}
+
+mean_boot_lda <- mean(boot_lda_acc)
+
 ```
 
 # Fit a Quadratic Discriminant Analysis model
@@ -258,6 +437,26 @@ mean(Y_pred_class_qda == Y_val)
 
 # Confusion matrix
 table(Y_pred_class_qda, Y_val)
+
+# Bootstrapping
+boot_qda_acc <- c()
+set.seed(123)
+for (i in 1:25){
+  boot_index <- sample(1:nrow(train), nrow(train), replace = TRUE)
+  boot_data <- train[boot_index,]
+  boot_data_test <- train[-boot_index,]
+  X_boot <- as.matrix(boot_data %>% dplyr::select(-Y))
+  Y_boot <- as.matrix(boot_data %>% dplyr::select(Y))
+  X_boot_test <- as.matrix(boot_data_test %>% dplyr::select(-Y))
+  Y_boot_test <- as.matrix(boot_data_test %>% dplyr::select(Y))
+  boot_model <- qda(Y ~ ., data = boot_data)
+  boot_pred <- predict(boot_model, boot_data_test)$class
+  boot_class <- ifelse(boot_pred == "1", 1, 0)
+  boot_acc <- mean(boot_class == Y_boot_test)
+  boot_qda_acc <- c(boot_qda_acc, boot_acc)
+}
+
+mean_boot_qda <- mean(boot_qda_acc)
 
 ```
 
@@ -277,6 +476,26 @@ mean(Y_pred_class_nb == Y_val)
 
 # Confusion matrix
 table(Y_pred_class_nb, Y_val)
+
+# Bootstrapping
+boot_nb_acc <- c()
+set.seed(123)
+for (i in 1:25){
+  boot_index <- sample(1:nrow(train), nrow(train), replace = TRUE)
+  boot_data <- train[boot_index,]
+  boot_data_test <- train[-boot_index,]
+  X_boot <- as.matrix(boot_data %>% dplyr::select(-Y))
+  Y_boot <- as.matrix(boot_data %>% dplyr::select(Y))
+  X_boot_test <- as.matrix(boot_data_test %>% dplyr::select(-Y))
+  Y_boot_test <- as.matrix(boot_data_test %>% dplyr::select(Y))
+  boot_model <- naiveBayes(Y ~ ., data = boot_data)
+  boot_pred <- predict(boot_model, boot_data_test)
+  boot_class <- ifelse(boot_pred == "1", 1, 0)
+  boot_acc <- mean(boot_class == Y_boot_test)
+  boot_nb_acc <- c(boot_nb_acc, boot_acc)
+}
+
+mean_boot_nb <- mean(boot_nb_acc)
 
 ```
 
@@ -307,4 +526,57 @@ accuracy_scores <- tibble(
 # Print the accuracy scores ordered by accuracy
 accuracy_scores %>% arrange(desc(Accuracy))
 
+# Collect bootstrapped accuracy scores
+boot_accuracy_scores <- tibble(
+  Method = c("LASSO", "Ridge", "Elastic Net", "Random Forest", "Gradient Boosting", 
+             "K-Nearest Neighbors", "Support Vector Machine", "Tree", 
+             "Linear Discriminant Analysis", "Quadratic Discriminant Analysis", "Naive Bayes"),
+  Boot_Accuracy = c(
+    mean_boot_lasso,
+    mean_boot_ridge,
+    mean_boot_enet,
+    mean_boot_rf,
+    mean_boot_xgb,
+    mean_boot_knn,
+    mean_boot_svm,
+    mean_boot_tree,
+    mean_boot_lda,
+    mean_boot_qda,
+    mean_boot_nb
+  )
+)
+
+# Print the bootstrapped accuracy scores ordered by accuracy
+boot_accuracy_scores %>% arrange(desc(Boot_Accuracy))
+
 ```
+
+# Make final predictions with SVM
+```{r}
+# Train X
+X_train <- as.matrix(train %>% dplyr::select(-Y))
+# Test X
+X_test <- as.matrix(test_x)
+
+# Train Y
+Y_train <- as.matrix(train %>% dplyr::select(Y))
+
+
+# Fit the model
+svm_model <- svm(Y ~ ., data = train_data, kernel = "radial", cost=0.7, gamma=0.01)
+
+# Make predictions
+Y_pred_svm <- predict(svm_model, X_test)
+Y_pred_class_svm <- ifelse(Y_pred_svm > 0.5, 1, 0)
+
+# Make df with columns y.guesses and test.acc
+df <- data.frame(y.guesses = Y_pred_class_svm,
+                 test.acc = .92,
+                 team.name = "Hauck_Strennen")
+
+# Save df
+save(df, file = "Hauck_Strennen.RData")
+```
+
+
+
