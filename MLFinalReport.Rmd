@@ -1,12 +1,472 @@
 ---
-title: "The Greatest Bet in Baseball"
-subtitle: "Six Simple Outs"
+title: "Grain Classification"
+subtitle: ""
 author: "Shane Hauck, Zachary Strennen"
 date: "2024-04-29"
 output: pdf_document
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include=FALSE, results='hide'}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+
+```{r, include=FALSE}
+library(tidyverse)
+library(glmnet)
+library(e1071)
+library(pROC)
+library(caret)
+train <- read_csv("train_data.csv")
+test_x <- read_csv("test_data_x.csv")
+
+train_index <- sample(1:nrow(train), 0.8*nrow(train))
+train_data <- train[train_index,]
+validation_data <- train[-train_index,]
+
+# Training set
+X_train <- as.matrix(train_data %>% dplyr::select(-Y))
+Y_train <- as.matrix(train_data %>% dplyr::select(Y))
+
+# Validation set
+X_val <- as.matrix(validation_data %>% dplyr::select(-Y))
+Y_val <- as.matrix(validation_data %>% dplyr::select(Y))
+
+# Fit the ideal model
+svm_model <- svm(X_train, Y_train, kernel = "radial", cost=0.7, gamma=0.01)
+
+# Make predictions
+Y_pred_svm <- predict(svm_model, X_val)
+Y_pred_class_svm <- ifelse(Y_pred_svm > 0.5, 1, 0)
+
+# Extract features for PCA (exclude the response variable Y)
+features <- train[, setdiff(names(train), "Y")]
+
+# Perform PCA, make sure to scale and center the data
+pca_result <- prcomp(features, scale. = TRUE, center = TRUE)
+
+# Extract the first two principal components
+pc1 <- pca_result$x[, 1]
+pc2 <- pca_result$x[, 2]
+
+# Create a data frame for plotting
+plot_data <- data.frame(PC1 = pc1, PC2 = pc2, Y = train$Y)
+```
+
+# Introduction
+
+As machine learning techniques rapidly grow in their number of applications, a computer’s ability to recognize and classify objects from a few given characteristics has significantly improved. For example, applications such as “Seek” and “Merlin Bird ID” are able to identify the species of an animal or plant from an inputted image or audio recording. When considering identification through images, features are usually computed using the pixels of the image via computer vision techniques. In this study, following the same algorithmic processes but in a more simplistic context, we will attempt to predict a binary grain type using sixteen provided geometrics features extracted from images of said grains.
+
+### The Data
+
+The provided training data set contains 4,946 rows with no missing values. The binary response variable Y, representing the actual grain classification, is simply denoted as either 0 or 1. The sixteen given predictor variables are all numeric and while there was no given data dictionary including units, we can assume these were mostly computed using some sort of pixel-based metrics. The sixteen predictor variables are as follows: AspectRation, Eccentricity, ConvexArea, EquivDiameter, Extent, Solidity, Roundness, Compactness, ShapeFactor1, ShapeFactor2, ShapeFactor3, and ShapeFactor4.
+
+# Exploration
+
+### Exploratory Data Analysis
+
+```{r, echo=FALSE, out.width="60%", fig.align = 'center', fig.cap='There are slightly more Y values classified as 0.'}
+ggplot(plot_data, aes(as.factor(Y))) +
+    geom_bar() +
+    theme_minimal() +
+    labs(title="Distribution of Y Classes",
+         y="Count",
+         x="Y Classification")
+```
+
+In Figure 1, we can see that Y does not have an even amount of 0s and 1s with there being a slightly higher number of zeros. To view how much of Y’s variance is explained by the given predictor variables we conducted principal component analysis (PCA). PCA is a method of linear regression where the data is standardized to have mean zero and some uniform variance. After computing a covariance matrix describing how variables relate to each other, the data can be then projected on the top resulting eigenvectors (ordered by the amount of variance captured by the data) in order to get principal components. Thus, we can see the most significant features and their effect on Y.
+
+Looking at Figure 2, we can see the first and second principal components plotted against each other with the points colored by their Y classification. We can see that most of the variation is explained by the first two principal components and that both Y classes are split into two distinct clusters. The two clusters slightly overlap which means that they are not completely separable in the two dimensional space of the first two principal components alone. In Figure 3, we can see that, while most of the variance is explained by the first two principal components, there is still some residual variance to be explained by the next seven subsequent principal components.
+
+```{r, echo=FALSE, out.width="60%", fig.align = 'center', fig.cap='There are two clear clusters for each class of Y with a little overlap in the center of the plot.'}
+# Generate the plot
+ggplot(plot_data, aes(x = PC1, y = PC2, color = factor(Y))) +
+  geom_point(alpha = 0.3) +  
+  labs(color = "Y") +        
+  theme_minimal() +          
+  ggtitle("PCA: PC1 vs. PC2 colored by Y") 
+```
+
+```{r, echo=FALSE, out.width="60%", fig.align = 'center', fig.cap='Most of the variance is explained by the first two dimensions but there is still residual variance in the subsequent principal components.'}
+# Calculate variance explained by each PC
+variance_explained <- summary(pca_result)$importance[2,]
+
+# Data frame of variance
+variance_data <- data.frame(PC = names(variance_explained), Variance = variance_explained)
+
+# Bar plot for PCA
+ggplot(variance_data, aes(x = reorder(PC, -Variance), y = Variance)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(x = "Principal Component", y = "Proportion of Variance Explained") +
+  ggtitle("Proportion of Variance Explained by Each Principal Component") +
+  theme_minimal()
+```
+
+# Supervised Analysis
+
+### Model Selection and Training Process
+
+Using our results from PCA, we employed various machine learning models that could reasonably predict Y. Doing so, we took into account strengths and trade-offs with consideration to the high correlation and the possible interactions between the predictor variables. Moreover, we want to address the potential separability that we can achieve with regards to the dimensional variability of the data. Our approach entailed a rigorous exploration of linear models with regularization (LASSO, Ridge, and Elastic Net), Naive Bayes, and non-linear models (Random Forest, Gradient Boosting, K-Nearest Neighbors, Support Vector Machines, Decision Trees, Linear Discriminant Analysis, and Quadratic Discriminant Analysis).
+
+### Regularization Techniques
+
+With multicollinearity being a concern, LASSO, Ridge, and Elastic Net were natural to try due to their regularization capabilities. LASSO was instrumental in our feature selection, penalizing the absolute size of the coefficients, which helps in reducing overfitting by shrinking some coefficients to zero. Ridge regression, on the other hand, penalized the squared size of the coefficients, favoring smaller, more robust coefficient estimates. The Elastic Net, a compromise between LASSO and Ridge, was used when predictor variables were not only high in number but also correlated.
+
+For each of these models, we employed cross-validation to determine the optimal lambda that minimizes the binomial deviance. Specifically, we used `cv.glmnet()` from the `glmnet` package, which automatically selects the best lambda via 10-fold cross-validation. 
+
+### Non-Linear Models
+
+Next, we looked into non-linear models with Random Forest classifiers and Gradient Boosting. A Random Forest classifier offers the advantage of handling non-linear relationships by building numerous decision trees and averaging their predictions, thereby reducing variance. Gradient Boosting iteratively refined its predictions and dealt adeptly with the non-linearities and interactions between variables.
+
+K-Nearest Neighbors (KNN) was tested for its simplicity and effectiveness in classification tasks, especially in a space where geometrical distances could be meaningful. Support Vector Machine (SVM) was another robust choice due to its capability to handle high-dimensional data and find the optimal hyperplane for classification tasks. A radial kernel allows for flexibility in separating the data.
+
+Decision Trees were considered for their interpretability and ease of use. Linear Discriminant Analysis (LDA) and Quadratic Discriminant Analysis (QDA) models offered statistical approaches to classification, assuming different covariance structures for the predictor variables. 
+
+### Tuning Parameters and Feature Engineering
+
+For each model, hyperparameters were tuned to enhance predictive performance. For instance, the number of trees (`ntree`) and the number of variables tried at each split (`mtry`) in the Random Forest model, the number of boosting rounds (`nrounds`) in the Gradient Boosting model, the number of neighbors (`k`) in KNN, and the `cost` and `gamma` parameters in SVM.
+
+We engineered features from the data where it was statistically justifiable based on the exploratory data analysis insights. We did not force any artificial manipulations, only natural transformations that could potentially unveil more complex relationships between the predictors and the response variable.
+
+### Validation Strategy
+
+We split the training data into a training set and a validation set using an 80-20% ratio, ensuring that we had a fair representation of both classes in each subset. Predictive performance was first evaluated on the validation set to guard against overfitting. Additionally, to ensure accuracies given can be consistently produced, k-fold cross validation was performed using the same training and testing split. Thus, we can ensure that our results will be more likely to perform well on unseen data.
+
+### Bootstrapping
+
+Furthermore, to estimate the accuracy of the models more robustly, we implemented a bootstrapping approach. For each model, we resampled the data with replacement 25 times, trained the model on this bootstrap sample, and evaluated its accuracy on the out-of-bag sample. This technique provided us with a distribution of accuracy scores, helping to ascertain the stability and reliability of our model's predictions.
+
+# Analysis of Results
+
+```{r, echo=FALSE, out.width="35%", fig.align = 'center', fig.cap='The confusion matrix demonstrates that the SVM produces accurate reults with few false negatives and positives.'}
+# Calculate confusion matrix
+conf_matrix <- confusionMatrix(as.factor(Y_pred_class_svm), as.factor(Y_val))
+
+# Plot confusion matrix
+fourfoldplot(conf_matrix$table, color = c("#CC6666", "#99CC99"), conf.level = 0, margin = 1, main = "SVM Confusion Matrix")
+```
+
+```{r, warning=FALSE, echo=FALSE, out.width="50%", fig.align = 'center', fig.cap='The ROC curve for the SVM looks very ideal meaning our model easily out performs a random chance.'}
+# ROC curve
+roc_obj <- suppressMessages(roc(as.numeric(as.factor(Y_val)), as.numeric(Y_pred_svm)))
+plot(roc_obj, main="SVM ROC Curve")
+```
+
+After trying all of the methods described above, we found that SVM was the best classifier. This makes sense as our PCA was displaying clear separability that was not directly linear in a two dimensional space. Thus, we used a radial kernel for the SVM as opposed to a linear kernel and doing this gave us consistently good results. To improve the model further, we also found the ideal tuning parameters to give the best results. Essentially, we iteratively built SVMs with different combinations of cost and gamma values and found a model with tuning parameters that consistently returned the highest accuracy on test sets. The ideal cost is 0.7 and the ideal gamma is 0.01.
+
+We also found that feature selection does not necessarily improve the SVM’s performance. This was discovered by using various variable selection techniques such as LASSO to limit potential noise from lurking variables. This result could be attributed to SVM having regularization parameters built into its processes. Thus, when training the model, we used all sixteen predictor variables.
+
+The resulting SVM has an F1 score of 0.9367 and consistent accuracy of approximately 92% from k-fold cross validation. When looking at the confusion matrix of the SVM (Figure 4), we can see that the model is performing really well and the number of false positives and negatives looks roughly even. The ROC curve for the model (Figure 5) also looks ideal. There is an immediate spike in sensitivity as specificity increases meaning that the model performs extremely better than a random classifier. This also accounts for the intricacies of the data’s variability at higher dimensions that requires a very complex decision boundary that can be achieved with SVMs.
+
+If we were given more time on this project, there are several different steps we could take to improve our results. We could methodically transform the current sixteen features to get more complex features that could help the SVM deal with complexity. We could also try more complex classifiers such as training a neural network with regards to the intertwined variability of the data. With more careful analysis and the right amount of computing power, there are definitely several paths of improvement that can be taken despite our optimistic results.
+
+# R Code Appendix
+
+### Data Loading and Pre-Processing
+
+```{r, eval=FALSE}
+library(tidyverse)
+library(tidyverse)
+library(glmnet)
+library(e1071)
+library(pROC)
+library(caret)
+```
+
+```{r, eval=FALSE}
+train <- read_csv("train_data.csv")
+test_x <- read_csv("test_data_x.csv")
+
+# Check for missing values
+sum(is.na(train))
+sum(is.na(test_x))
+
+# Check for duplicates
+train %>% distinct() %>% nrow()
+test_x %>% distinct() %>% nrow()
+
+# Check for outliers
+train %>% summary()
+test_x %>% summary()
+
+# Check for class imbalance
+train %>% group_by(Y) %>% count()
+```
+
+### Splitting the Test Data
+
+```{r, eval=FALSE}
+# 80-20 split
+train_index <- sample(1:nrow(train), 0.8*nrow(train))
+train_data <- train[train_index,]
+validation_data <- train[-train_index,]
+
+# Training set
+X_train <- as.matrix(train_data %>% dplyr::select(-Y))
+Y_train <- as.matrix(train_data %>% dplyr::select(Y))
+
+# Validation set
+X_val <- as.matrix(validation_data %>% dplyr::select(-Y))
+Y_val <- as.matrix(validation_data %>% dplyr::select(Y))
+```
+
+### LASSO
+
+```{r, eval=FALSE}
+# Fit the model
+lasso_model <- cv.glmnet(X_train, Y_train, family = "binomial", alpha = 1)
+
+# Make predictions
+Y_pred_lasso <- predict(lasso_model, s = "lambda.min", newx = X_val, type = "response")
+
+# Calculate the accuracy
+Y_pred_class_lasso <- ifelse(Y_pred_lasso > 0.5, 1, 0)
+mean(Y_pred_class_lasso == Y_val)
+
+# Confusion matrix
+table(Y_pred_class_lasso, Y_val)
+
+# Log likelihood loss
+log_loss <- -mean(Y_val*log(Y_pred_lasso) + (1-Y_val)*log(1-Y_pred_lasso))
+
+# Show the coefficients
+coef(lasso_model, s = "lambda.min")
+
+
+# Bootstrapping LASSO
+boot_lasso_acc <- c()
+for (i in 1:25){
+  boot_index <- sample(1:nrow(train), nrow(train), replace = TRUE)
+  boot_data <- train[boot_index,]
+  boot_data_test <- train[-boot_index,]
+  X_boot <- as.matrix(boot_data %>% dplyr::select(-Y))
+  Y_boot <- as.matrix(boot_data %>% dplyr::select(Y))
+  X_boot_test <- as.matrix(boot_data_test %>% dplyr::select(-Y))
+  Y_boot_test <- as.matrix(boot_data_test %>% dplyr::select(Y))
+  boot_model <- cv.glmnet(X_boot, Y_boot, family = "binomial", alpha = 1)
+  boot_pred <- predict(boot_model, s = "lambda.min", newx = X_boot_test, type = "response")
+  boot_class <- ifelse(boot_pred > 0.5, 1, 0)
+  boot_acc <- mean(boot_class == Y_boot_test)
+  boot_lasso_acc <- c(boot_lasso_acc, boot_acc)
+}
+
+mean_boot_lasso <- mean(boot_lasso_acc)
+```
+
+### Bootstrapping for SVM
+
+```{r, eval=FALSE}
+# Fit the model
+svm_model <- svm(X_train, Y_train, kernel = "radial", cost=0.7, gamma=0.01)
+
+# Make predictions
+Y_pred_svm <- predict(svm_model, X_val)
+Y_pred_class_svm <- ifelse(Y_pred_svm > 0.5, 1, 0)
+
+# Calculate the accuracy
+mean(Y_pred_class_svm == Y_val)
+
+# Confusion matrix
+table(Y_pred_class_svm, Y_val)
+
+# Bootstrapping SVM
+boot_svm_acc <- c()
+set.seed(123)
+for (i in 1:25){
+  boot_index <- sample(1:nrow(train), nrow(train), replace = TRUE)
+  boot_data <- train[boot_index,]
+  boot_data_test <- train[-boot_index,]
+  X_boot <- as.matrix(boot_data %>% dplyr::select(-Y))
+  Y_boot <- as.matrix(boot_data %>% dplyr::select(Y))
+  X_boot_test <- as.matrix(boot_data_test %>% dplyr::select(-Y))
+  Y_boot_test <- as.matrix(boot_data_test %>% dplyr::select(Y))
+  boot_model <- svm(X_boot, Y_boot, kernel = "radial", cost=0.7, gamma=0.01)
+  boot_pred <- predict(boot_model, X_boot_test)
+  boot_class <- ifelse(boot_pred > 0.5, 1, 0)
+  boot_acc <- mean(boot_class == Y_boot_test)
+  boot_svm_acc <- c(boot_svm_acc, boot_acc)
+}
+
+mean_boot_svm <- mean(boot_svm_acc)
+```
+
+### Viewing Results from all models
+
+```{r, eval=FALSE}
+# Collect accuracy scores
+accuracy_scores <- tibble(
+  Method = c("LASSO", "Ridge", "Elastic Net", "Random Forest", "Gradient Boosting", 
+             "K-Nearest Neighbors", "Support Vector Machine", "Tree", 
+             "Linear Discriminant Analysis", "Quadratic Discriminant Analysis", "Naive Bayes"),
+  Accuracy = c(
+    mean(Y_pred_class_lasso == Y_val),
+    mean(Y_pred_class_ridge == Y_val),
+    mean(Y_pred_class_enet == Y_val),
+    mean(Y_pred_class_rf == Y_val),
+    mean(Y_pred_class_xgb == Y_val),
+    mean(knn_model == Y_val),
+    mean(Y_pred_class_svm == Y_val),
+    mean(Y_pred_class_tree == Y_val),
+    mean(Y_pred_class_lda == Y_val),
+    mean(Y_pred_class_qda == Y_val),
+    mean(Y_pred_class_nb == Y_val)
+  )
+)
+
+# Print the accuracy scores ordered by accuracy
+accuracy_scores %>% arrange(desc(Accuracy))
+
+# Collect bootstrapped accuracy scores
+boot_accuracy_scores <- tibble(
+  Method = c("LASSO", "Ridge", "Elastic Net", "Random Forest", "Gradient Boosting", 
+             "K-Nearest Neighbors", "Support Vector Machine", "Tree", 
+             "Linear Discriminant Analysis", "Quadratic Discriminant Analysis", "Naive Bayes"),
+  Boot_Accuracy = c(
+    mean_boot_lasso,
+    mean_boot_ridge,
+    mean_boot_enet,
+    mean_boot_rf,
+    mean_boot_xgb,
+    mean_boot_knn,
+    mean_boot_svm,
+    mean_boot_tree,
+    mean_boot_lda,
+    mean_boot_qda,
+    mean_boot_nb
+  )
+)
+
+# Print the bootstrapped accuracy scores ordered by accuracy
+boot_accuracy_scores %>% arrange(desc(Boot_Accuracy))
+```
+
+### Getting the Best Tuning Parameters for SVM
+
+```{r, eval=FALSE}
+# Define ranges for the tuning parameters
+costs <- c(0.6, 0.7, 0.8, 0.9, 1)
+gammas <- c(0.008, 0.009, 0.01, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045)
+
+# Initialize variables to store the best parameters and highest accuracy
+best_cost <- NULL
+best_gamma <- NULL
+highest_accuracy <- 0
+
+# Loop through all combinations of cost and gamma
+for (cost in costs) {
+  for (gamma in gammas) {
+    # Fit the model with the current combination of parameters
+    svm_model <- svm(X_train, Y_train, 
+                     kernel = "radial", 
+                     cost = cost, 
+                     gamma = gamma)
+    
+    # Make predictions
+    Y_pred_svm <- predict(svm_model, X_val)
+    Y_pred_class_svm <- ifelse(Y_pred_svm > 0.5, 1, 0)
+
+    # Calculate the accuracy
+    current_accuracy <- mean(Y_pred_class_svm == Y_val)
+
+    # Update the best parameters if the current accuracy is higher
+    if (current_accuracy > highest_accuracy) {
+      highest_accuracy <- current_accuracy
+      best_cost <- cost
+      best_gamma <- gamma
+    }
+  }
+}
+
+# Output the best parameters and the highest accuracy
+cat("Best Cost: ", best_cost, "\n")
+cat("Best Gamma: ", best_gamma, "\n")
+cat("Highest Accuracy: ", highest_accuracy, "\n")
+```
+
+### Best SVM Model
+
+```{r, eval=FALSE}
+svm_model <- svm(Y ~ ., data = train_data, 
+                 kernel = "radial", 
+                 cost=0.7, 
+                 gamma=0.01)
+
+Y_pred_svm <- predict(svm_model, X_test)
+y.guesses <- ifelse(Y_pred_svm > 0.5, 1, 0)
+y.guesses <- as.vector(y.guesses)
+test.acc = .08
+team.name = "Hauck_Strennen"
+```
+
+### Figure 1 Visualization
+
+```{r, eval=FALSE}
+ggplot(plot_data, aes(as.factor(Y))) +
+    geom_bar() +
+    theme_minimal() +
+    labs(title="Distribution of Y Classes",
+         y="Count",
+         x="Y Classification")
+```
+
+### Figure 2 Visualization
+
+```{r, eval=FALSE}
+# Extract features for PCA (exclude response variable Y)
+features <- train[, setdiff(names(train), "Y")]
+
+# Perform PCA, make sure to scale and center the data
+pca_result <- prcomp(features, scale. = TRUE, center = TRUE)
+
+# Extract the first two principal components
+pc1 <- pca_result$x[, 1]
+pc2 <- pca_result$x[, 2]
+
+# Create a data frame for plotting
+plot_data <- data.frame(PC1 = pc1, PC2 = pc2, Y = train$Y)
+
+# Generate the plot
+ggplot(plot_data, aes(x = PC1, y = PC2, color = factor(Y))) +
+  geom_point(alpha = 0.3) +  
+  labs(color = "Y") +        
+  theme_minimal() +          
+  ggtitle("PCA: PC1 vs. PC2 colored by Y") 
+```
+
+### Figure 3 Visualization
+
+```{r, eval=FALSE}
+# Calculate variance explained by each PC
+variance_explained <- summary(pca_result)$importance[2,]
+
+# Data frame of variance
+variance_data <- data.frame(PC = names(variance_explained),
+                            Variance = variance_explained)
+
+# Bar plot for PCA
+ggplot(variance_data, aes(x = reorder(PC, -Variance), y = Variance)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(x = "Principal Component", y = "Proportion of Variance Explained") +
+  ggtitle("Proportion of Variance Explained by Each Principal Component") +
+  theme_minimal()
+```
+
+### Figure 4 Visualization
+
+```{r, eval=FALSE}
+# Calculate confusion matrix
+conf_matrix <- confusionMatrix(as.factor(Y_pred_class_svm), as.factor(Y_val))
+
+# Plot confusion matrix
+fourfoldplot(conf_matrix$table, color = c("#CC6666", "#99CC99"), 
+             conf.level = 0, margin = 1, main = "SVM Confusion Matrix")
+```
+
+### Figure 5 Visualization
+
+```{r, eval=FALSE}
+# ROC curve
+roc_obj <- suppressMessages(roc(as.numeric(as.factor(Y_val)), as.numeric(Y_pred_svm)))
+plot(roc_obj, main="SVM ROC Curve")
+```
+
 

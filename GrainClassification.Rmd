@@ -18,7 +18,6 @@ library(tidyverse)
 ```{r}
 train <- read_csv("train_data.csv")
 test_x <- read_csv("test_data_x.csv")
-
 ```
 
 # Data Pre-Processing
@@ -502,6 +501,7 @@ mean_boot_nb <- mean(boot_nb_acc)
 
 
 # Report the results for each model
+
 ```{r}
 # Collect accuracy scores
 accuracy_scores <- tibble(
@@ -565,15 +565,20 @@ Y_train <- as.matrix(train %>% dplyr::select(Y))
 # Fit the model
 svm_model <- svm(Y ~ ., data = train_data, kernel = "radial", cost=0.7, gamma=0.01)
 
-# Make predictions
+
 Y_pred_svm <- predict(svm_model, X_test)
-Y_pred_class_svm <- ifelse(Y_pred_svm > 0.5, 1, 0)
+y.guesses <- ifelse(Y_pred_svm > 0.5, 1, 0)
+y.guesses <- as.vector(y.guesses)
+test.acc = .08
+team.name = "Hauck_Strennen"
 
 # Make df with columns y.guesses and test.acc
 df <- data.frame(y.guesses = Y_pred_class_svm,
-                 test.acc = .92,
+                 test.acc = .08,
                  team.name = "Hauck_Strennen")
 
+save(list=c("y.guesses","test.acc","team.name"),file="stat462project2.RData")
+y.guesses <- as.vector(y.guesses)
 # Save df
 save(df, file = "Hauck_Strennen.RData")
 ```

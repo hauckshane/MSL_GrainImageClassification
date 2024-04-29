@@ -1,0 +1,15 @@
+load("/Users/zachstrennen/Documents/SquareFace_official_repo/MSL_GrainImageClassification/stat462project.RData")
+library(tidyverse)
+y.guesses
+load("/Users/zachstrennen/Documents/SquareFace_official_repo/MSL_GrainImageClassification/stat462project2.RData")
+y.guesses
+load("/Users/zachstrennen/Documents/SquareFace_official_repo/MSL_GrainImageClassification/stat462project.RData")
+y.guesses
+load("/Users/zachstrennen/Documents/SquareFace_official_repo/MSL_GrainImageClassification/stat462project.RData")
+y.guesses
+ls()
+load("/Users/zachstrennen/Documents/SquareFace_official_repo/MSL_GrainImageClassification/stat462project2.RData")
+ls()
+load("/Users/zachstrennen/Documents/SquareFace_official_repo/MSL_GrainImageClassification/stat462project.RData")
+ls()
+y.guesses
