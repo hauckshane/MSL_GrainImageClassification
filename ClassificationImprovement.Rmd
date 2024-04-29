@@ -185,3 +185,78 @@ mean(Y_pred_class_svm == Y_val)
 # Confusion matrix
 table(Y_pred_class_svm, Y_val)
 ```
+
+
+```{r}
+# Assuming 'train' is your dataset and 'Y' is the response variable
+# Extract features for PCA (exclude the response variable Y)
+features <- train[, setdiff(names(train), "Y")]
+
+# Perform PCA, make sure to scale and center the data
+pca_result <- prcomp(features, scale. = TRUE, center = TRUE)
+
+# Extract the first two principal components
+pc1 <- pca_result$x[, 1]
+pc2 <- pca_result$x[, 2]
+
+# Create a data frame for plotting
+plot_data <- data.frame(PC1 = pc1, PC2 = pc2, Y = train$Y)
+
+# Generate the plot
+ggplot(plot_data, aes(x = PC1, y = PC2, color = factor(Y))) +
+  geom_point(alpha = 0.5) +  # alpha for better visibility if points overlap
+  labs(color = "Y") +        # Label the color legend
+  theme_minimal() +          # Optional: use a minimal theme
+  ggtitle("PCA: PC1 vs. PC2 colored by Y")  # Add a title to the plot
+```
+
+```{r}
+ggplot(plot_data, aes(as.factor(Y))) +
+    geom_bar() +
+    theme_minimal() +
+    labs(title="Distribution of Y Classes",
+         y="Count",
+         x="Y Classification")
+```
+
+```{r}
+library(caret)
+# Convert predictions to factor for confusion matrix calculation if needed
+Y_val <- factor(Y_val, levels = c(0, 1))
+Y_pred_class_svm <- factor(Y_pred_class_svm, levels = c(0, 1))
+
+# Confusion matrix
+conf_matrix <- confusionMatrix(Y_pred_class_svm, Y_val)
+print(conf_matrix)
+
+# Plotting the confusion matrix
+library(corrplot)
+corrplot::corrplot(conf_matrix$table, is.corr = FALSE)
+
+# Accuracy
+accuracy <- sum(Y_pred_class_svm == Y_val) / length(Y_val)
+print(paste("Accuracy:", accuracy))
+
+# Calculating precision, recall, and F1-score
+precision <- posPredValue(Y_pred_class_svm, Y_val, positive = "1")
+recall <- sensitivity(Y_pred_class_svm, Y_val, positive = "1")
+f1_score <- (2 * precision * recall) / (precision + recall)
+
+print(paste("Precision:", precision))
+print(paste("Recall:", recall))
+print(paste("F1 Score:", f1_score))
+```
+
+```{r}
+library(pROC) 
+# Calculate confusion matrix
+conf_matrix <- confusionMatrix(as.factor(Y_pred_class_svm), as.factor(Y_val))
+
+# Plot confusion matrix
+fourfoldplot(conf_matrix$table, color = c("#CC6666", "#99CC99"), conf.level = 0, margin = 1, main = "Confusion Matrix")
+
+# ROC curve and AUC
+roc_obj <- roc(as.numeric(as.factor(Y_val)), as.numeric(Y_pred_svm))
+plot(roc_obj, main="ROC Curve")
+auc(roc_obj)
+```
