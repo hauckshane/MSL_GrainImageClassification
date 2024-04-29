@@ -1,0 +1,12 @@
+---
+title: "The Greatest Bet in Baseball"
+subtitle: "Six Simple Outs"
+author: "Shane Hauck, Zachary Strennen"
+date: "2024-04-29"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
