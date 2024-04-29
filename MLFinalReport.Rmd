@@ -1,5 +1,5 @@
 ---
-title: "Grain Classification"
+title: "Grain Classification with Machine Learning"
 subtitle: ""
 author: "Shane Hauck, Zachary Strennen"
 date: "2024-04-29"
@@ -105,7 +105,7 @@ ggplot(variance_data, aes(x = reorder(PC, -Variance), y = Variance)) +
 
 ### Model Selection and Training Process
 
-Using our results from PCA, we employed various machine learning models that could reasonably predict Y. Doing so, we took into account strengths and trade-offs with consideration to the high correlation and the possible interactions between the predictor variables. Moreover, we want to address the potential separability that we can achieve with regards to the dimensional variability of the data. Our approach entailed a rigorous exploration of linear models with regularization (LASSO, Ridge, and Elastic Net), Naive Bayes, and non-linear models (Random Forest, Gradient Boosting, K-Nearest Neighbors, Support Vector Machines, Decision Trees, Linear Discriminant Analysis, and Quadratic Discriminant Analysis).
+Using our results from PCA, we employed various machine learning models that could reasonably predict Y. Doing so, we took into account strengths and trade-offs with consideration to the high correlation and the possible interactions between the predictor variables. Moreover, we want to address the potential separability that we can achieve with regards to the dimensional variability of the data. Our approach entailed a rigorous exploration of linear models with regularization (LASSO, Ridge, and Elastic Net), and non-linear models (Random Forest, Gradient Boosting, K-Nearest Neighbors, Support Vector Machines, Decision Trees, Linear Discriminant Analysis, and Quadratic Discriminant Analysis).
 
 ### Regularization Techniques
 
@@ -296,7 +296,7 @@ mean_boot_svm <- mean(boot_svm_acc)
 accuracy_scores <- tibble(
   Method = c("LASSO", "Ridge", "Elastic Net", "Random Forest", "Gradient Boosting", 
              "K-Nearest Neighbors", "Support Vector Machine", "Tree", 
-             "Linear Discriminant Analysis", "Quadratic Discriminant Analysis", "Naive Bayes"),
+             "Linear Discriminant Analysis", "Quadratic Discriminant Analysis"),
   Accuracy = c(
     mean(Y_pred_class_lasso == Y_val),
     mean(Y_pred_class_ridge == Y_val),
@@ -307,8 +307,7 @@ accuracy_scores <- tibble(
     mean(Y_pred_class_svm == Y_val),
     mean(Y_pred_class_tree == Y_val),
     mean(Y_pred_class_lda == Y_val),
-    mean(Y_pred_class_qda == Y_val),
-    mean(Y_pred_class_nb == Y_val)
+    mean(Y_pred_class_qda == Y_val)
   )
 )
 
@@ -319,7 +318,7 @@ accuracy_scores %>% arrange(desc(Accuracy))
 boot_accuracy_scores <- tibble(
   Method = c("LASSO", "Ridge", "Elastic Net", "Random Forest", "Gradient Boosting", 
              "K-Nearest Neighbors", "Support Vector Machine", "Tree", 
-             "Linear Discriminant Analysis", "Quadratic Discriminant Analysis", "Naive Bayes"),
+             "Linear Discriminant Analysis", "Quadratic Discriminant Analysis"),
   Boot_Accuracy = c(
     mean_boot_lasso,
     mean_boot_ridge,
@@ -330,13 +329,51 @@ boot_accuracy_scores <- tibble(
     mean_boot_svm,
     mean_boot_tree,
     mean_boot_lda,
-    mean_boot_qda,
-    mean_boot_nb
+    mean_boot_qda
   )
 )
 
 # Print the bootstrapped accuracy scores ordered by accuracy
 boot_accuracy_scores %>% arrange(desc(Boot_Accuracy))
+```
+
+### Using LASSO Selected Variables in SVM
+
+```{r, eval=FALSE}
+# Training set with only lasso variables
+X_train <- as.matrix(train_data %>% dplyr::select(-c(Y,
+                                                     Area,
+                                                     MajorAxisLength,
+                                                     MinorAxisLength,
+                                                     EquivDiameter,
+                                                     Compactness,
+                                                     ShapeFactor2,
+                                                     ShapeFactor3)))
+Y_train <- as.matrix(train_data %>% dplyr::select(Y))
+
+# Validation set with only lasso variables
+X_val <- as.matrix(validation_data %>% dplyr::select(-c(Y,
+                                                     Area,
+                                                     MajorAxisLength,
+                                                     MinorAxisLength,
+                                                     EquivDiameter,
+                                                     Compactness,
+                                                     ShapeFactor2,
+                                                     ShapeFactor3)))
+Y_val <- as.matrix(validation_data %>% dplyr::select(Y))
+
+# Fit the model
+svm_model <- svm(X_train, Y_train, kernel = "radial")
+
+# Make predictions
+Y_pred_svm <- predict(svm_model, X_val)
+Y_pred_class_svm <- ifelse(Y_pred_svm > 0.5, 1, 0)
+
+# Calculate the accuracy
+mean(Y_pred_class_svm == Y_val)
+
+# Confusion matrix
+table(Y_pred_class_svm, Y_val)
 ```
 
 ### Getting the Best Tuning Parameters for SVM
