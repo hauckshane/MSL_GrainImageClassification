@@ -137,6 +137,514 @@ Furthermore, to estimate the accuracy of the models more robustly, we implemente
 
 # Analysis of Results
 
+**HERE**
+
+# Load Data
+```{r message=FALSE, warning=FALSE, include=FALSE}
+train <- read_csv("train_data.csv")
+test_x <- read_csv("test_data_x.csv")
+
+
+
+
+
+
+# Split train into train and validation
+
+set.seed(123)
+train_index <- sample(1:nrow(train), 0.8*nrow(train))
+train_data <- train[train_index,]
+validation_data <- train[-train_index,]
+
+
+
+# Create matrix of predictors and response
+
+# Training set
+X_train <- as.matrix(train_data %>% dplyr::select(-Y))
+Y_train <- as.matrix(train_data %>% dplyr::select(Y))
+
+# Validation set
+X_val <- as.matrix(validation_data %>% dplyr::select(-Y))
+Y_val <- as.matrix(validation_data %>% dplyr::select(Y))
+
+
+
+# Fit a LASSO model 
+
+library(glmnet)
+
+# Fit the model
+lasso_model <- cv.glmnet(X_train, Y_train, family = "binomial", alpha = 1)
+
+# Make predictions
+Y_pred_lasso <- predict(lasso_model, s = "lambda.min", newx = X_val, type = "response")
+
+# Calculate the accuracy
+Y_pred_class_lasso <- ifelse(Y_pred_lasso > 0.5, 1, 0)
+
+
+# Log likelihood loss
+log_loss <- -mean(Y_val*log(Y_pred_lasso) + (1-Y_val)*log(1-Y_pred_lasso))
+
+
+
+# Bootstrapping
+boot_lasso_acc <- c()
+set.seed(123)
+for (i in 1:25){
+  boot_index <- sample(1:nrow(train), nrow(train), replace = TRUE)
+  boot_data <- train[boot_index,]
+  boot_data_test <- train[-boot_index,]
+  X_boot <- as.matrix(boot_data %>% dplyr::select(-Y))
+  Y_boot <- as.matrix(boot_data %>% dplyr::select(Y))
+  X_boot_test <- as.matrix(boot_data_test %>% dplyr::select(-Y))
+  Y_boot_test <- as.matrix(boot_data_test %>% dplyr::select(Y))
+  boot_model <- cv.glmnet(X_boot, Y_boot, family = "binomial", alpha = 1)
+  boot_pred <- predict(boot_model, s = "lambda.min", newx = X_boot_test, type = "response")
+  boot_class <- ifelse(boot_pred > 0.5, 1, 0)
+  boot_acc <- mean(boot_class == Y_boot_test)
+  boot_lasso_acc <- c(boot_lasso_acc, boot_acc)
+}
+
+mean_boot_lasso <- mean(boot_lasso_acc)
+
+
+# Fit a Ridge model
+
+# Fit the model
+ridge_model <- cv.glmnet(X_train, Y_train, family = "binomial", alpha = 0)
+
+# Make predictions
+Y_pred_ridge <- predict(ridge_model, s = "lambda.min", newx = X_val, type = "response")
+
+# Calculate the accuracy
+Y_pred_class_ridge <- ifelse(Y_pred_ridge > 0.5, 1, 0)
+
+
+# Log likelihood loss
+log_loss <- -mean(Y_val*log(Y_pred_ridge) + (1-Y_val)*log(1-Y_pred_ridge))
+
+
+# Bootstrapping
+boot_ridge_acc <- c()
+set.seed(123)
+for (i in 1:25){
+  boot_index <- sample(1:nrow(train), nrow(train), replace = TRUE)
+  boot_data <- train[boot_index,]
+  boot_data_test <- train[-boot_index,]
+  X_boot <- as.matrix(boot_data %>% dplyr::select(-Y))
+  Y_boot <- as.matrix(boot_data %>% dplyr::select(Y))
+  X_boot_test <- as.matrix(boot_data_test %>% dplyr::select(-Y))
+  Y_boot_test <- as.matrix(boot_data_test %>% dplyr::select(Y))
+  boot_model <- cv.glmnet(X_boot, Y_boot, family = "binomial", alpha = 0)
+  boot_pred <- predict(boot_model, s = "lambda.min", newx = X_boot_test, type = "response")
+  boot_class <- ifelse(boot_pred > 0.5, 1, 0)
+  boot_acc <- mean(boot_class == Y_boot_test)
+  boot_ridge_acc <- c(boot_ridge_acc, boot_acc)
+}
+
+mean_boot_ridge <- mean(boot_ridge_acc)
+
+
+
+# Fit a Elastic Net model
+
+# Fit the model
+enet_model <- cv.glmnet(X_train, Y_train, family = "binomial", alpha = 0.5)
+
+# Make predictions
+Y_pred_enet <- predict(enet_model, s = "lambda.min", newx = X_val, type = "response")
+Y_pred_class_enet <- ifelse(Y_pred_enet > 0.5, 1, 0)
+
+
+
+
+# Bootstrapping
+boot_enet_acc <- c()
+set.seed(123)
+for (i in 1:25){
+  boot_index <- sample(1:nrow(train), nrow(train), replace = TRUE)
+  boot_data <- train[boot_index,]
+  boot_data_test <- train[-boot_index,]
+  X_boot <- as.matrix(boot_data %>% dplyr::select(-Y))
+  Y_boot <- as.matrix(boot_data %>% dplyr::select(Y))
+  X_boot_test <- as.matrix(boot_data_test %>% dplyr::select(-Y))
+  Y_boot_test <- as.matrix(boot_data_test %>% dplyr::select(Y))
+  boot_model <- cv.glmnet(X_boot, Y_boot, family = "binomial", alpha = 0.5)
+  boot_pred <- predict(boot_model, s = "lambda.min", newx = X_boot_test, type = "response")
+  boot_class <- ifelse(boot_pred > 0.5, 1, 0)
+  boot_acc <- mean(boot_class == Y_boot_test)
+  boot_enet_acc <- c(boot_enet_acc, boot_acc)
+}
+
+mean_boot_enet <- mean(boot_enet_acc)
+
+
+
+# Fit a Random Forest model
+
+library(randomForest)
+
+# Fit the model
+rf_model <- randomForest(X_train, Y_train, ntree = 25, mtry = 3)
+
+# Make predictions
+Y_pred_rf <- predict(rf_model, X_val, type = "response")
+
+# Calculate the accuracy
+Y_pred_class_rf <- ifelse(Y_pred_rf > 0.5, 1, 0)
+
+
+# Bootstrapping
+boot_rf_acc <- c()
+set.seed(123)
+for (i in 1:25){
+  boot_index <- sample(1:nrow(train), nrow(train), replace = TRUE)
+  boot_data <- train[boot_index,]
+  boot_data_test <- train[-boot_index,]
+  X_boot <- as.matrix(boot_data %>% dplyr::select(-Y))
+  Y_boot <- as.matrix(boot_data %>% dplyr::select(Y))
+  X_boot_test <- as.matrix(boot_data_test %>% dplyr::select(-Y))
+  Y_boot_test <- as.matrix(boot_data_test %>% dplyr::select(Y))
+  boot_model <- randomForest(X_boot, Y_boot, ntree = 25, mtry = 3)
+  boot_pred <- predict(boot_model, X_boot_test, type = "response")
+  boot_class <- ifelse(boot_pred > 0.5, 1, 0)
+  boot_acc <- mean(boot_class == Y_boot_test)
+  boot_rf_acc <- c(boot_rf_acc, boot_acc)
+}
+
+mean_boot_rf <- mean(boot_rf_acc)
+
+
+
+# Fit a Gradient Boosting model
+
+library(xgboost)
+
+# Fit the model
+xgb_model <- xgboost(data = X_train, label = Y_train, nrounds = 25, objective = "binary:logistic")
+
+# Make predictions
+Y_pred_xgb <- predict(xgb_model, X_val)
+
+# Calculate the accuracy
+Y_pred_class_xgb <- ifelse(Y_pred_xgb > 0.5, 1, 0)
+
+
+# Bootstrapping
+boot_xgb_acc <- c()
+set.seed(123)
+for (i in 1:25){
+  boot_index <- sample(1:nrow(train), nrow(train), replace = TRUE)
+  boot_data <- train[boot_index,]
+  boot_data_test <- train[-boot_index,]
+  X_boot <- as.matrix(boot_data %>% dplyr::select(-Y))
+  Y_boot <- as.matrix(boot_data %>% dplyr::select(Y))
+  X_boot_test <- as.matrix(boot_data_test %>% dplyr::select(-Y))
+  Y_boot_test <- as.matrix(boot_data_test %>% dplyr::select(Y))
+  boot_model <- xgboost(data = X_boot, label = Y_boot, nrounds = 25, objective = "binary:logistic")
+  boot_pred <- predict(boot_model, X_boot_test)
+  boot_class <- ifelse(boot_pred > 0.5, 1, 0)
+  boot_acc <- mean(boot_class == Y_boot_test)
+  boot_xgb_acc <- c(boot_xgb_acc, boot_acc)
+}
+
+mean_boot_xgb <- mean(boot_xgb_acc)
+
+
+
+# Fit a K-Nearest Neighbors model
+
+library(class)
+
+# Fit the model
+knn_model <- knn(X_train, X_val, Y_train, k = 5)
+
+# Calculate the accuracy
+mean(knn_model == Y_val)
+
+# Confusion matrix
+table(knn_model, Y_val)
+
+# Bootstrapping
+boot_knn_acc <- c()
+set.seed(123)
+for (i in 1:25){
+  boot_index <- sample(1:nrow(train), nrow(train), replace = TRUE)
+  boot_data <- train[boot_index,]
+  boot_data_test <- train[-boot_index,]
+  X_boot <- as.matrix(boot_data %>% dplyr::select(-Y))
+  Y_boot <- as.matrix(boot_data %>% dplyr::select(Y))
+  X_boot_test <- as.matrix(boot_data_test %>% dplyr::select(-Y))
+  Y_boot_test <- as.matrix(boot_data_test %>% dplyr::select(Y))
+  boot_model <- knn(X_boot, X_boot_test, Y_boot, k = 5)
+  boot_acc <- mean(boot_model == Y_boot_test)
+  boot_knn_acc <- c(boot_knn_acc, boot_acc)
+}
+
+mean_boot_knn <- mean(boot_knn_acc)
+
+
+
+# Fit a Support Vector Machine model
+
+library(e1071)
+
+# Fit the model
+svm_model <- svm(X_train, Y_train, kernel = "radial", cost=0.7, gamma=0.01)
+
+# Make predictions
+Y_pred_svm <- predict(svm_model, X_val)
+Y_pred_class_svm <- ifelse(Y_pred_svm > 0.5, 1, 0)
+
+
+
+# Bootstrapping
+boot_svm_acc <- c()
+set.seed(123)
+for (i in 1:25){
+  boot_index <- sample(1:nrow(train), nrow(train), replace = TRUE)
+  boot_data <- train[boot_index,]
+  boot_data_test <- train[-boot_index,]
+  X_boot <- as.matrix(boot_data %>% dplyr::select(-Y))
+  Y_boot <- as.matrix(boot_data %>% dplyr::select(Y))
+  X_boot_test <- as.matrix(boot_data_test %>% dplyr::select(-Y))
+  Y_boot_test <- as.matrix(boot_data_test %>% dplyr::select(Y))
+  boot_model <- svm(X_boot, Y_boot, kernel = "radial", cost=0.7, gamma=0.01)
+  boot_pred <- predict(boot_model, X_boot_test)
+  boot_class <- ifelse(boot_pred > 0.5, 1, 0)
+  boot_acc <- mean(boot_class == Y_boot_test)
+  boot_svm_acc <- c(boot_svm_acc, boot_acc)
+}
+
+mean_boot_svm <- mean(boot_svm_acc)
+
+
+
+# Fit a Tree model
+
+library(rpart)
+# Fit the model
+tree_model <- rpart(Y ~ ., data = train_data, method = "class")
+
+# Make predictions
+Y_pred_tree <- predict(tree_model, validation_data, type = "class")
+Y_pred_class_tree <- ifelse(Y_pred_tree == "1", 1, 0)
+
+
+# Bootstrapping
+boot_tree_acc <- c()
+set.seed(123)
+for (i in 1:25){
+  boot_index <- sample(1:nrow(train), nrow(train), replace = TRUE)
+  boot_data <- train[boot_index,]
+  boot_data_test <- train[-boot_index,]
+  X_boot <- as.matrix(boot_data %>% dplyr::select(-Y))
+  Y_boot <- as.matrix(boot_data %>% dplyr::select(Y))
+  X_boot_test <- as.matrix(boot_data_test %>% dplyr::select(-Y))
+  Y_boot_test <- as.matrix(boot_data_test %>% dplyr::select(Y))
+  boot_model <- rpart(Y ~ ., data = boot_data, method = "class")
+  boot_pred <- predict(boot_model, boot_data_test, type = "class")
+  boot_class <- ifelse(boot_pred == "1", 1, 0)
+  boot_acc <- mean(boot_class == Y_boot_test)
+  boot_tree_acc <- c(boot_tree_acc, boot_acc)
+}
+
+mean_boot_tree <- mean(boot_tree_acc)
+
+
+# Fit a Linear Discriminant Analysis model
+
+library(MASS)
+
+# Fit the model
+lda_model <- lda(Y ~ ., data = train_data)
+
+# Make predictions
+Y_pred_lda <- predict(lda_model, validation_data)$class
+Y_pred_class_lda <- ifelse(Y_pred_lda == "1", 1, 0)
+
+
+
+# Bootstrapping
+boot_lda_acc <- c()
+set.seed(123)
+for (i in 1:25){
+  boot_index <- sample(1:nrow(train), nrow(train), replace = TRUE)
+  boot_data <- train[boot_index,]
+  boot_data_test <- train[-boot_index,]
+  X_boot <- as.matrix(boot_data %>% dplyr::select(-Y))
+  Y_boot <- as.matrix(boot_data %>% dplyr::select(Y))
+  X_boot_test <- as.matrix(boot_data_test %>% dplyr::select(-Y))
+  Y_boot_test <- as.matrix(boot_data_test %>% dplyr::select(Y))
+  boot_model <- lda(Y ~ ., data = boot_data)
+  boot_pred <- predict(boot_model, boot_data_test)$class
+  boot_class <- ifelse(boot_pred == "1", 1, 0)
+  boot_acc <- mean(boot_class == Y_boot_test)
+  boot_lda_acc <- c(boot_lda_acc, boot_acc)
+}
+
+mean_boot_lda <- mean(boot_lda_acc)
+
+
+
+# Fit a Quadratic Discriminant Analysis model
+
+# Fit the model
+qda_model <- qda(Y ~ ., data = train_data)
+
+# Make predictions
+Y_pred_qda <- predict(qda_model, validation_data)$class
+Y_pred_class_qda <- ifelse(Y_pred_qda == "1", 1, 0)
+
+
+
+
+# Bootstrapping
+boot_qda_acc <- c()
+set.seed(123)
+for (i in 1:25){
+  boot_index <- sample(1:nrow(train), nrow(train), replace = TRUE)
+  boot_data <- train[boot_index,]
+  boot_data_test <- train[-boot_index,]
+  X_boot <- as.matrix(boot_data %>% dplyr::select(-Y))
+  Y_boot <- as.matrix(boot_data %>% dplyr::select(Y))
+  X_boot_test <- as.matrix(boot_data_test %>% dplyr::select(-Y))
+  Y_boot_test <- as.matrix(boot_data_test %>% dplyr::select(Y))
+  boot_model <- qda(Y ~ ., data = boot_data)
+  boot_pred <- predict(boot_model, boot_data_test)$class
+  boot_class <- ifelse(boot_pred == "1", 1, 0)
+  boot_acc <- mean(boot_class == Y_boot_test)
+  boot_qda_acc <- c(boot_qda_acc, boot_acc)
+}
+
+mean_boot_qda <- mean(boot_qda_acc)
+
+
+# Fit a Naive Bayes model
+
+library(e1071)
+
+# Fit the model
+nb_model <- naiveBayes(Y ~ ., data = train_data)
+
+# Make predictions
+Y_pred_nb <- predict(nb_model, validation_data)
+Y_pred_class_nb <- ifelse(Y_pred_nb == "1", 1, 0)
+
+
+
+
+# Bootstrapping
+boot_nb_acc <- c()
+set.seed(123)
+for (i in 1:25){
+  boot_index <- sample(1:nrow(train), nrow(train), replace = TRUE)
+  boot_data <- train[boot_index,]
+  boot_data_test <- train[-boot_index,]
+  X_boot <- as.matrix(boot_data %>% dplyr::select(-Y))
+  Y_boot <- as.matrix(boot_data %>% dplyr::select(Y))
+  X_boot_test <- as.matrix(boot_data_test %>% dplyr::select(-Y))
+  Y_boot_test <- as.matrix(boot_data_test %>% dplyr::select(Y))
+  boot_model <- naiveBayes(Y ~ ., data = boot_data)
+  boot_pred <- predict(boot_model, boot_data_test)
+  boot_class <- ifelse(boot_pred == "1", 1, 0)
+  boot_acc <- mean(boot_class == Y_boot_test)
+  boot_nb_acc <- c(boot_nb_acc, boot_acc)
+}
+
+mean_boot_nb <- mean(boot_nb_acc)
+
+```
+
+
+
+
+
+```{r echo=FALSE, fig.align='center', fig.cap='Cross Validation Accuracy for each model', message=FALSE, warning=FALSE}
+library(knitr)
+
+# Collect accuracy scores
+accuracy_scores <- tibble(
+  Method = c("LASSO", "Ridge", "Elastic Net", "Random Forest", "Gradient Boosting", 
+             "K-Nearest Neighbors", "Support Vector Machine", "Tree", 
+             "Linear Discriminant Analysis", "Quadratic Discriminant Analysis"),
+  Accuracy = c(
+    mean(Y_pred_class_lasso == Y_val),
+    mean(Y_pred_class_ridge == Y_val),
+    mean(Y_pred_class_enet == Y_val),
+    mean(Y_pred_class_rf == Y_val),
+    mean(Y_pred_class_xgb == Y_val),
+    mean(knn_model == Y_val),
+    mean(Y_pred_class_svm == Y_val),
+    mean(Y_pred_class_tree == Y_val),
+    mean(Y_pred_class_lda == Y_val),
+    mean(Y_pred_class_qda == Y_val)
+  )
+) %>% as.data.frame() %>% mutate(Accuracy = round(Accuracy, 4))
+
+# Print the accuracy scores ordered by accuracy
+kable(accuracy_scores %>% arrange(desc(Accuracy)))
+```
+
+```{r echo=FALSE, fig.align='center', fig.cap='Bootstrapped accuracy scores for each model'}
+# Collect bootstrapped accuracy scores
+boot_accuracy_scores <- tibble(
+  Method = c("LASSO", "Ridge", "Elastic Net", "Random Forest", "Gradient Boosting", 
+             "K-Nearest Neighbors", "Support Vector Machine", "Tree", 
+             "Linear Discriminant Analysis", "Quadratic Discriminant Analysis"),
+  Boot_Accuracy = c(
+    mean_boot_lasso,
+    mean_boot_ridge,
+    mean_boot_enet,
+    mean_boot_rf,
+    mean_boot_xgb,
+    mean_boot_knn,
+    mean_boot_svm,
+    mean_boot_tree,
+    mean_boot_lda,
+    mean_boot_qda
+  )
+)  %>% as.data.frame() %>% mutate(Boot_Accuracy = round(Boot_Accuracy, 4))
+
+# Print the bootstrapped accuracy scores ordered by accuracy
+kable(boot_accuracy_scores %>% arrange(desc(Boot_Accuracy)))
+
+```
+
+```{r, echo=FALSE, fig.align='center', fig.cap='Ridge plots showing distributions of Bootstrapped Accuracy Scores'}}
+# RBind all Bootstrapped dfs
+rbind(data.frame(Variable = "Lasso", "Accuracy" = boot_lasso_acc),
+      data.frame(Variable = "Ridge", "Accuracy" = boot_ridge_acc),
+      data.frame(Variable = "Elastic Net", "Accuracy" = boot_enet_acc),
+      data.frame(Variable = "Random Forest", "Accuracy" = boot_rf_acc),
+      data.frame(Variable = "Gradient Boosting", "Accuracy" = boot_xgb_acc),
+      data.frame(Variable = "K-Nearest Neighbors", "Accuracy" = boot_knn_acc),
+      data.frame(Variable = "Support Vector Machine", "Accuracy" = boot_svm_acc),
+      data.frame(Variable = "Tree", "Accuracy" = boot_tree_acc),
+      data.frame(Variable = "Linear Discriminant Analysis", "Accuracy" = boot_lda_acc),
+      data.frame(Variable = "Quadratic Discriminant Analysis", "Accuracy" = boot_qda_acc)) -> boot_df
+
+# Create ridge plots
+library(ggridges)
+
+boot_df %>%
+  group_by(Variable) %>%
+  mutate(meanAcc = mean(Accuracy)) %>%
+  ggplot(aes(x = Accuracy, y = reorder(Variable, meanAcc))) +
+  geom_density_ridges(scale = 1, rel_min_height = 0.01, ) +
+  labs(title = "Bootstrapped Accuracy Scores for Each Model",
+       x = "Accuracy",
+       y = "Model") +
+  theme_minimal()
+
+```
+
+
+
+
+
 ```{r, echo=FALSE, out.width="35%", fig.align = 'center', fig.cap='The confusion matrix demonstrates that the SVM produces accurate reults with few false negatives and positives.'}
 # Calculate confusion matrix
 conf_matrix <- confusionMatrix(as.factor(Y_pred_class_svm), as.factor(Y_val))
