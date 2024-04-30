@@ -129,7 +129,7 @@ We engineered features from the data where it was statistically justifiable base
 
 ### Validation Strategy
 
-We split the training data into a training set and a validation set using an 80-20% ratio, ensuring that we had a fair representation of both classes in each subset. Predictive performance was first evaluated on the validation set to guard against overfitting. Additionally, to ensure accuracies given can be consistently produced, k-fold cross validation was performed using the same training and testing split. Thus, we can ensure that our results will be more likely to perform well on unseen data.
+We split the training data into a training set and a validation set using an 80-20% ratio, ensuring that we had a fair representation of both classes in each subset. Predictive performance was first evaluated on the validation set to guard against overfitting. Additionally, to ensure accuracies given by cross-validation are consistent, multiple accuracies were computed for each model type by performing cross-validation on bootstrapped data. Thus, we can ensure that our results will be more likely to perform well on unseen data.
 
 ### Bootstrapping
 
@@ -137,9 +137,6 @@ Furthermore, to estimate the accuracy of the models more robustly, we implemente
 
 # Analysis of Results
 
-**HERE**
-
-# Load Data
 ```{r message=FALSE, warning=FALSE, include=FALSE}
 train <- read_csv("train_data.csv")
 test_x <- read_csv("test_data_x.csv")
@@ -562,7 +559,7 @@ mean_boot_nb <- mean(boot_nb_acc)
 
 
 
-```{r echo=FALSE, fig.align='center', fig.cap='Cross Validation Accuracy for each model', message=FALSE, warning=FALSE}
+```{r, echo=FALSE, fig.align='center', fig.cap='Cross-Validation Accuracy for each model.', message=FALSE, warning=FALSE}
 library(knitr)
 
 # Collect accuracy scores
@@ -585,10 +582,10 @@ accuracy_scores <- tibble(
 ) %>% as.data.frame() %>% mutate(Accuracy = round(Accuracy, 4))
 
 # Print the accuracy scores ordered by accuracy
-kable(accuracy_scores %>% arrange(desc(Accuracy)))
+kable(accuracy_scores %>% arrange(desc(Accuracy)), caption = "Initial Cross-Validation Accuracy Scores for Each Model.")
 ```
 
-```{r echo=FALSE, fig.align='center', fig.cap='Bootstrapped accuracy scores for each model'}
+```{r, echo=FALSE, fig.align='center', fig.cap='Bootstrapped accuracy scores for each model.'}
 # Collect bootstrapped accuracy scores
 boot_accuracy_scores <- tibble(
   Method = c("LASSO", "Ridge", "Elastic Net", "Random Forest", "Gradient Boosting", 
@@ -609,11 +606,15 @@ boot_accuracy_scores <- tibble(
 )  %>% as.data.frame() %>% mutate(Boot_Accuracy = round(Boot_Accuracy, 4))
 
 # Print the bootstrapped accuracy scores ordered by accuracy
-kable(boot_accuracy_scores %>% arrange(desc(Boot_Accuracy)))
+kable(boot_accuracy_scores %>% arrange(desc(Boot_Accuracy)), caption = "Bootstrapped Accuracy Scores for Each Model.")
 
 ```
 
-```{r, echo=FALSE, fig.align='center', fig.cap='Ridge plots showing distributions of Bootstrapped Accuracy Scores'}}
+When examining Table 1 and Table 2, we can see that all of our selected methods returned very high accuracies for both initial cross-validation and bootstrapped cross-validation. SVM was the top performer for during initial cross-validation. After bootstrapping, we found that LASSO, Elastic Net, and SVM consistently performed best on the given training data. We do not have complete confidence that any of these methods are superior to the rest from looking at the ridge plots in Figure 4. Aside from QDA and KNN, all of the ridges look generally in line with each other in terms of accuracy and even range. The highest performers barely edge ahead and there should absolutely be caution taken when applying these methods on unseen data.
+
+From our analysis, we decided that SVM was the best classifier. This made sense as our PCA was displaying potential separability that was not directly linear in a two dimensional space. We used a radial kernel for the SVM as opposed to a linear kernel and doing this gave us consistently good results. To improve the model further, we also found the ideal tuning parameters to give the best results. Essentially, we iteratively built SVMs with different combinations of cost and gamma values and found a model with tuning parameters that consistently returned the highest accuracy on test sets. The ideal cost is 0.7 and the ideal gamma is 0.01.
+
+```{r, echo=FALSE, out.width="75%", fig.align='center', fig.cap='Ridge plots show the distributions of bootstrapped accuracy scores.', warning=FALSE, message=FALSE}
 # RBind all Bootstrapped dfs
 rbind(data.frame(Variable = "Lasso", "Accuracy" = boot_lasso_acc),
       data.frame(Variable = "Ridge", "Accuracy" = boot_ridge_acc),
@@ -624,7 +625,8 @@ rbind(data.frame(Variable = "Lasso", "Accuracy" = boot_lasso_acc),
       data.frame(Variable = "Support Vector Machine", "Accuracy" = boot_svm_acc),
       data.frame(Variable = "Tree", "Accuracy" = boot_tree_acc),
       data.frame(Variable = "Linear Discriminant Analysis", "Accuracy" = boot_lda_acc),
-      data.frame(Variable = "Quadratic Discriminant Analysis", "Accuracy" = boot_qda_acc)) -> boot_df
+      data.frame(Variable = "Quadratic Discriminant Analysis", "Accuracy" = boot_qda_acc)) %>%
+    suppressMessages() -> boot_df
 
 # Create ridge plots
 library(ggridges)
@@ -638,7 +640,6 @@ boot_df %>%
        x = "Accuracy",
        y = "Model") +
   theme_minimal()
-
 ```
 
 
@@ -659,13 +660,11 @@ roc_obj <- suppressMessages(roc(as.numeric(as.factor(Y_val)), as.numeric(Y_pred_
 plot(roc_obj, main="SVM ROC Curve")
 ```
 
-After trying all of the methods described above, we found that SVM was the best classifier. This makes sense as our PCA was displaying clear separability that was not directly linear in a two dimensional space. Thus, we used a radial kernel for the SVM as opposed to a linear kernel and doing this gave us consistently good results. To improve the model further, we also found the ideal tuning parameters to give the best results. Essentially, we iteratively built SVMs with different combinations of cost and gamma values and found a model with tuning parameters that consistently returned the highest accuracy on test sets. The ideal cost is 0.7 and the ideal gamma is 0.01.
-
 We also found that feature selection does not necessarily improve the SVM’s performance. This was discovered by using various variable selection techniques such as LASSO to limit potential noise from lurking variables. This result could be attributed to SVM having regularization parameters built into its processes. Thus, when training the model, we used all sixteen predictor variables.
 
-The resulting SVM has an F1 score of 0.9367 and consistent accuracy of approximately 92% from k-fold cross validation. When looking at the confusion matrix of the SVM (Figure 4), we can see that the model is performing really well and the number of false positives and negatives looks roughly even. The ROC curve for the model (Figure 5) also looks ideal. There is an immediate spike in sensitivity as specificity increases meaning that the model performs extremely better than a random classifier. This also accounts for the intricacies of the data’s variability at higher dimensions that requires a very complex decision boundary that can be achieved with SVMs.
+The resulting SVM has an F1 score of 0.9367 and consistent accuracy of approximately 92.2% from bootstrapping cross-validation. When looking at the confusion matrix of the SVM (Figure 5), we can see that the model is performing really well and the number of false positives and negatives looks roughly even. The ROC curve for the model (Figure 6) also looks ideal. There is an immediate spike in sensitivity as specificity increases meaning that the model performs extremely better than a random classifier. This also accounts for the intricacies of the data’s variability at higher dimensions that requires a very complex decision boundary that can be achieved with SVMs.
 
-If we were given more time on this project, there are several different steps we could take to improve our results. We could methodically transform the current sixteen features to get more complex features that could help the SVM deal with complexity. We could also try more complex classifiers such as training a neural network with regards to the intertwined variability of the data. With more careful analysis and the right amount of computing power, there are definitely several paths of improvement that can be taken despite our optimistic results.
+If we were given more time on this project, there are several different steps we could take to improve our results. We could methodically transform the current sixteen features to get more complex features that could help the SVM deal with complexity. We could also try more complex classifiers such as training a neural network with regards to the intertwined variability of the data. A study such as this would benefit from more data as well so that we can perform more rigorous feature selection. With more careful analysis and the right amount of computing power, there are definitely several paths of improvement that can be taken despite our optimistic results.
 
 # R Code Appendix
 
@@ -678,6 +677,7 @@ library(glmnet)
 library(e1071)
 library(pROC)
 library(caret)
+library(ggridges)
 ```
 
 ```{r, eval=FALSE}
@@ -998,6 +998,33 @@ ggplot(variance_data, aes(x = reorder(PC, -Variance), y = Variance)) +
 ### Figure 4 Visualization
 
 ```{r, eval=FALSE}
+# RBind all Bootstrapped dfs
+rbind(data.frame(Variable = "Lasso", "Accuracy" = boot_lasso_acc),
+      data.frame(Variable = "Ridge", "Accuracy" = boot_ridge_acc),
+      data.frame(Variable = "Elastic Net", "Accuracy" = boot_enet_acc),
+      data.frame(Variable = "Random Forest", "Accuracy" = boot_rf_acc),
+      data.frame(Variable = "Gradient Boosting", "Accuracy" = boot_xgb_acc),
+      data.frame(Variable = "K-Nearest Neighbors", "Accuracy" = boot_knn_acc),
+      data.frame(Variable = "Support Vector Machine", "Accuracy" = boot_svm_acc),
+      data.frame(Variable = "Tree", "Accuracy" = boot_tree_acc),
+      data.frame(Variable = "Linear Discriminant Analysis", "Accuracy" = boot_lda_acc),
+      data.frame(Variable = "Quadratic Discriminant Analysis", "Accuracy" = boot_qda_acc)) %>%
+    suppressMessages() -> boot_df
+
+boot_df %>%
+  group_by(Variable) %>%
+  mutate(meanAcc = mean(Accuracy)) %>%
+  ggplot(aes(x = Accuracy, y = reorder(Variable, meanAcc))) +
+  geom_density_ridges(scale = 1, rel_min_height = 0.01, ) +
+  labs(title = "Bootstrapped Accuracy Scores for Each Model",
+       x = "Accuracy",
+       y = "Model") +
+  theme_minimal()
+```
+
+### Figure 5 Visualization
+
+```{r, eval=FALSE}
 # Calculate confusion matrix
 conf_matrix <- confusionMatrix(as.factor(Y_pred_class_svm), as.factor(Y_val))
 
@@ -1006,7 +1033,7 @@ fourfoldplot(conf_matrix$table, color = c("#CC6666", "#99CC99"),
              conf.level = 0, margin = 1, main = "SVM Confusion Matrix")
 ```
 
-### Figure 5 Visualization
+### Figure 6 Visualization
 
 ```{r, eval=FALSE}
 # ROC curve
@@ -1014,4 +1041,51 @@ roc_obj <- suppressMessages(roc(as.numeric(as.factor(Y_val)), as.numeric(Y_pred_
 plot(roc_obj, main="SVM ROC Curve")
 ```
 
+### Table 1 and 2
+
+```{r, eval=FALSE}
+# Collect accuracy scores
+accuracy_scores <- tibble(
+  Method = c("LASSO", "Ridge", "Elastic Net", "Random Forest", "Gradient Boosting", 
+             "K-Nearest Neighbors", "Support Vector Machine", "Tree", 
+             "Linear Discriminant Analysis", "Quadratic Discriminant Analysis"),
+  Accuracy = c(
+    mean(Y_pred_class_lasso == Y_val),
+    mean(Y_pred_class_ridge == Y_val),
+    mean(Y_pred_class_enet == Y_val),
+    mean(Y_pred_class_rf == Y_val),
+    mean(Y_pred_class_xgb == Y_val),
+    mean(knn_model == Y_val),
+    mean(Y_pred_class_svm == Y_val),
+    mean(Y_pred_class_tree == Y_val),
+    mean(Y_pred_class_lda == Y_val),
+    mean(Y_pred_class_qda == Y_val)
+  )
+) %>% as.data.frame() %>% mutate(Accuracy = round(Accuracy, 4))
+
+# Print the accuracy scores ordered by accuracy
+kable(accuracy_scores %>% arrange(desc(Accuracy)), caption = "Initial Cross-Validation Accuracy Scores for Each Model.")
+
+# Collect bootstrapped accuracy scores
+boot_accuracy_scores <- tibble(
+  Method = c("LASSO", "Ridge", "Elastic Net", "Random Forest", "Gradient Boosting", 
+             "K-Nearest Neighbors", "Support Vector Machine", "Tree", 
+             "Linear Discriminant Analysis", "Quadratic Discriminant Analysis"),
+  Boot_Accuracy = c(
+    mean_boot_lasso,
+    mean_boot_ridge,
+    mean_boot_enet,
+    mean_boot_rf,
+    mean_boot_xgb,
+    mean_boot_knn,
+    mean_boot_svm,
+    mean_boot_tree,
+    mean_boot_lda,
+    mean_boot_qda
+  )
+)  %>% as.data.frame() %>% mutate(Boot_Accuracy = round(Boot_Accuracy, 4))
+
+# Print the bootstrapped accuracy scores ordered by accuracy
+kable(boot_accuracy_scores %>% arrange(desc(Boot_Accuracy)), caption = "Bootstrapped Accuracy Scores for Aach Model.")
+```
 
